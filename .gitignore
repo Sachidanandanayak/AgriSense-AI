@@ -49,13 +49,17 @@ desktop.ini
 .coverage
 htmlcov/
 
-# Data and ML Models (prevent committing large files, keep .gitkeep)
+# Data and ML Models (prevent committing large data files, track manifests)
 backend/data/raw/*
 !backend/data/raw/.gitkeep
+!backend/data/raw/checksums.sha256
 backend/data/processed/*
 !backend/data/processed/.gitkeep
+!backend/data/processed/dataset_metadata.json
 backend/ml/models/*
 !backend/ml/models/.gitkeep
+!backend/ml/models/metrics.json
+!backend/ml/models/model_report.md
 backend/ml/datasets/*
 !backend/ml/datasets/.gitkeep
 
