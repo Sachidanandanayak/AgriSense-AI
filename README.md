@@ -4,7 +4,7 @@
 
 ---
 
-> **Current Development Status:** **Phase 1 — Backend Foundation**
+> **Current Development Status:** **Phase 4 — Weather Data Integration**
 
 ---
 
@@ -118,5 +118,5 @@ AgriSense-AI/
 
 ## 🚀 Current Milestone
 
-> **Phase 1 — Backend Foundation**  
-> Initializing the professional repository structure, establishing clean architectural separation of concerns, and configuring a minimal, high-performance FastAPI backend scaffold with health checks and API documentation.
+> **Phase 4 — Weather Data Integration**  
+> Established resilient, decoupled meteorological data ingestion service interfacing with Open-Meteo, normalizing observations (temperature, humidity, precipitation, wind speed) into unified Pydantic schemas under `/api/weather` with full test isolation.
