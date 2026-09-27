@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from app.api.routes.weather import router as weather_router
+from app.api.routes.satellite import router as satellite_router
 from app.core.config import settings
 
 app = FastAPI(
@@ -10,6 +11,7 @@ app = FastAPI(
 
 # Register API routers
 app.include_router(weather_router, prefix=settings.API_PREFIX, tags=["Weather"])
+app.include_router(satellite_router, prefix=settings.API_PREFIX, tags=["Satellite"])
 
 
 @app.get("/")

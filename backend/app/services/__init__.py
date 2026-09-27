@@ -10,6 +10,20 @@ from app.services.weather_service import (
     WeatherRateLimitError,
     WeatherProviderError,
 )
+from app.services.satellite_service import (
+    SatelliteService,
+    satellite_service,
+    SatelliteServiceError,
+    InvalidDateRangeError,
+    InvalidParameterError,
+    EarthEngineAuthError,
+    EarthEngineInitError,
+    NoObservationsFoundError,
+    EarthEngineExecutionError,
+    compute_ndvi,
+    compute_ndwi,
+    compute_ndmi,
+)
 
 __all__ = [
     "WeatherService",
@@ -20,4 +34,16 @@ __all__ = [
     "WeatherConnectionError",
     "WeatherRateLimitError",
     "WeatherProviderError",
+    "SatelliteService",
+    "satellite_service",
+    "SatelliteServiceError",
+    "InvalidDateRangeError",
+    "InvalidParameterError",
+    "EarthEngineAuthError",
+    "EarthEngineInitError",
+    "NoObservationsFoundError",
+    "EarthEngineExecutionError",
+    "compute_ndvi",
+    "compute_ndwi",
+    "compute_ndmi",
 ]

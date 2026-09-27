@@ -4,7 +4,7 @@
 
 ---
 
-> **Current Development Status:** **Phase 4 — Weather Data Integration**
+> **Current Development Status:** **Phase 5 — Satellite Data Integration**
 
 ---
 
@@ -118,5 +118,15 @@ AgriSense-AI/
 
 ## 🚀 Current Milestone
 
-> **Phase 4 — Weather Data Integration**  
-> Established resilient, decoupled meteorological data ingestion service interfacing with Open-Meteo, normalizing observations (temperature, humidity, precipitation, wind speed) into unified Pydantic schemas under `/api/weather` with full test isolation.
+> **Phase 5 — Satellite Data Integration**  
+> Integrated Google Earth Engine (Sentinel-2 Harmonized Surface Reflectance `COPERNICUS/S2_SR_HARMONIZED` + `COPERNICUS/S2_CLOUD_PROBABILITY`). Implemented pixel-level cloud probability filtering, temporal median compositing, and regional zonal aggregation for key agricultural indices:
+> - **NDVI**: $(B8 - B4) / (B8 + B4)$ (Canopy vigor and density)
+> - **NDWI (McFeeters 1996)**: $(B3 - B8) / (B3 + B8)$ (Surface water bodies and water-logging)
+> - **NDMI (Gao 1996)**: $(B8 - B11) / (B8 + B11)$ (Canopy moisture content and leaf water stress)
+> 
+> Exposed through `GET /api/satellite` with configurable point analysis radius (default 500m) and cloud probability threshold (default 65%).
+> 
+> **Important Disclaimers:**
+> - *"The current implementation uses a point-centered analysis radius and therefore does not represent an exact farm boundary."*
+> - *"Satellite indices are environmental indicators and are not direct crop-suitability scores."*
+> - *Satellite data is currently DATA INFRASTRUCTURE; the baseline ML model has NOT been retrained or modified.*

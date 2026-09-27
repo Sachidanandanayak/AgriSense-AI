@@ -26,5 +26,26 @@ class Settings:
         os.getenv("WEATHER_TIMEOUT_SECONDS", "10.0")
     )
 
+    # Satellite Provider Configuration (Google Earth Engine)
+    EARTHENGINE_PROJECT: str | None = (
+        os.getenv("EARTHENGINE_PROJECT") or os.getenv("EE_PROJECT_ID") or None
+    )
+    EARTHENGINE_SERVICE_ACCOUNT: str | None = (
+        os.getenv("EARTHENGINE_SERVICE_ACCOUNT") or None
+    )
+    EARTHENGINE_KEY_FILE: str | None = os.getenv("EARTHENGINE_KEY_FILE") or None
+    EARTHENGINE_PRIVATE_KEY: str | None = os.getenv("EARTHENGINE_PRIVATE_KEY") or None
+    EARTHENGINE_TIMEOUT_SECONDS: float = float(
+        os.getenv("EARTHENGINE_TIMEOUT_SECONDS", "25.0")
+    )
+
+    # Satellite Analysis Defaults
+    SATELLITE_DEFAULT_RADIUS_M: float = float(
+        os.getenv("SATELLITE_DEFAULT_RADIUS_M", "500.0")
+    )
+    SATELLITE_DEFAULT_CLOUD_THRESHOLD: float = float(
+        os.getenv("SATELLITE_DEFAULT_CLOUD_THRESHOLD", "65.0")
+    )
+
 
 settings = Settings()
