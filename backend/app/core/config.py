@@ -47,5 +47,15 @@ class Settings:
         os.getenv("SATELLITE_DEFAULT_CLOUD_THRESHOLD", "65.0")
     )
 
+    # Soil Provider Configuration (ISRIC SoilGrids 2.0)
+    SOILGRIDS_BASE_URL: str = os.getenv(
+        "SOILGRIDS_BASE_URL",
+        "https://rest.isric.org/soilgrids/v2.0/properties/query",
+    )
+    SOILGRIDS_TIMEOUT_SECONDS: float = float(
+        os.getenv("SOILGRIDS_TIMEOUT_SECONDS", "15.0")
+    )
+    SOIL_DEFAULT_DEPTH: str = os.getenv("SOIL_DEFAULT_DEPTH", "0-5cm")
+
 
 settings = Settings()

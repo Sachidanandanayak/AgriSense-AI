@@ -4,7 +4,7 @@ The backend of **AgriSense AI** provides the core RESTful API services that powe
 
 ---
 
-> **Current Milestone:** **Phase 5 — Satellite Data Integration**
+> **Current Milestone:** **Phase 6 — Soil & Geospatial Data Integration**
 
 ---
 
@@ -18,6 +18,7 @@ The backend of **AgriSense AI** provides the core RESTful API services that powe
 | `GET` | `/redoc` | Interactive ReDoc API Docs | Interactive UI (`text/html`) |
 | `GET` | `/api/weather` | Current Normalized Weather Observations | `?latitude=16.20&longitude=77.35` |
 | `GET` | `/api/satellite` | Sentinel-2 Vegetation & Moisture Indices | `?latitude=16.20&longitude=77.35&start_date=2026-09-01&end_date=2026-09-25` |
+| `GET` | `/api/soil` | Normalized Soil Properties & Texture | `?latitude=20.59&longitude=78.96&depth=0-5cm` |
 
 ---
 
@@ -380,3 +381,141 @@ GET /api/satellite?latitude=16.20&longitude=77.35&start_date=2026-09-01&end_date
   - GeoJSON farm polygon boundary upload.
   - Multi-field spatial aggregation.
   - Phenological time-series trajectory tracking (NDVI curve slope for sowing/harvest detection).
+
+---
+
+## 🌱 Phase 6: Soil & Geospatial Data Integration
+
+### 1. Purpose & Scope
+Phase 6 establishes the digital soil data infrastructure for AgriSense AI. It provides point-based soil property lookups for farmer coordinates without requiring heavy local raster datasets, GeoTIFF downloads, or PostGIS databases.
+
+> [!IMPORTANT]
+> **Data Infrastructure Only — ML Model Untouched:**
+> Soil data is ingested as an independent data source. The Random Forest ML model is **NOT** retrained, `backend/ml/` is **NOT** modified, and soil features are not substituted into the baseline model yet. Multi-source ML fusion will take place in subsequent phases.
+
+---
+
+### 2. Selected Soil Data Source: ISRIC SoilGrids 2.0
+- **Provider**: [ISRIC — World Soil Information](https://www.isric.org/)
+- **Platform**: [SoilGrids 2.0](https://soilgrids.org/)
+- **Documentation**: [https://docs.isric.org/globaldata/soilgrids/](https://docs.isric.org/globaldata/soilgrids/)
+- **Spatial Resolution**: Approximately **250 meters** globally.
+- **Licensing & Attribution**: SoilGrids 2.0 data is publicly available under the **Creative Commons Attribution 4.0 International (CC BY 4.0)** license.
+  *Citation*: Poggio, L., de Sousa, L. M., Batjes, N. H., et al. (2021). *SoilGrids 2.0: producing soil information for the globe with quantified spatial uncertainty*. SOIL, 7, 217–240.
+
+---
+
+### 3. Soil Properties & Unit Conversions
+SoilGrids stores and transmits integer-mapped values to optimize storage. To obtain conventional scientific and agronomic units, the raw value must be **divided by the official conversion factor (d_factor)**:
+
+| Property | SoilGrids Layer | Mapped Units | Conversion Factor (`d_factor`) | Conventional Units | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Soil pH** | `phh2o` | $\text{pH} \times 10$ | **10** | **pH** | Soil pH measured in $1:5$ water solution (0–14 scale) |
+| **Clay** | `clay` | $\text{g/kg}$ | **10** | **%** ($\text{g}/100\text{g}$) | Proportion of clay particles ($< 2\,\mu\text{m}$) |
+| **Sand** | `sand` | $\text{g/kg}$ | **10** | **%** ($\text{g}/100\text{g}$) | Proportion of sand particles ($50–2000\,\mu\text{m}$) |
+| **Silt** | `silt` | $\text{g/kg}$ | **10** | **%** ($\text{g}/100\text{g}$) | Proportion of silt particles ($2–50\,\mu\text{m}$) |
+| **Organic Carbon** | `soc` | $\text{dg/kg}$ | **10** | **g/kg** | Soil organic carbon content in fine earth fraction |
+| **Bulk Density** | `bdod` | $\text{cg/cm}^3$ | **100** | **kg/dm³** ($\text{g/cm}^3$) | Bulk density of the fine earth fraction |
+| **CEC** | `cec` | $\text{mmol}(c)/\text{kg}$ | **10** | **cmol(c)/kg** | Cation Exchange Capacity at pH 7 |
+| **Nitrogen** | `nitrogen` | $\text{cg/kg}$ | **100** | **g/kg** | Total nitrogen content |
+
+> [!NOTE]
+> All unit conversions are strictly implemented via explicit numeric divisions by `d_factor` in [`backend/app/services/soil_service.py`](file:///c:/Users/sachin/Pictures/Screenshots/PROJECTS/AgriSense-AI/backend/app/services/soil_service.py) according to official ISRIC documentation. No conversions are invented or estimated.
+
+---
+
+### 4. Standard Depth Intervals
+SoilGrids models soil properties across 6 standard depth layers:
+- `0-5cm` (**Default MVP depth** — represents the active agricultural seedbed and topsoil)
+- `5-15cm`
+- `15-30cm`
+- `30-60cm`
+- `60-100cm`
+- `100-200cm`
+
+---
+
+### 5. Architecture & Provider Abstraction
+To safeguard against upstream API instability, the soil integration is decoupled using a provider interface:
+
+```text
+FastAPI Route (GET /api/soil) [Param validation]
+                     ↓
+Soil Service (backend/app/services/soil_service.py) [Normalization & conversions]
+                     ↓
+Soil Provider Interface (backend/app/services/soil_provider.py) [BaseSoilProvider]
+                     ↓
+SoilGridsProvider (HTTP Client with timeouts & error mapping)
+                     ↓
+ISRIC SoilGrids 2.0 REST API (https://rest.isric.org/soilgrids/v2.0/properties/query)
+```
+
+- **Beta Service Notice & Fair Use Policy**: SoilGrids REST API v2.0 is currently a beta service without high-availability guarantees. ISRIC requests adherence to a fair-use policy (maximum 5 requests per minute). The provider abstraction isolates this dependency so alternative backends (local raster tile servers or WCS services) can be plugged in without route alterations.
+
+---
+
+### 6. API Endpoint & Usage
+
+#### Endpoint
+```http
+GET /api/soil
+```
+
+#### Query Parameters
+- `latitude` (float, required): Latitude between `-90.0` and `90.0`
+- `longitude` (float, required): Longitude between `-180.0` and `180.0`
+- `depth` (string, optional, default: `"0-5cm"`): Standard depth interval (`0-5cm`, `5-15cm`, `15-30cm`, `30-60cm`, `60-100cm`, `100-200cm`)
+
+#### Example Request
+```powershell
+Invoke-RestMethod "http://127.0.0.1:8000/api/soil?latitude=20.59&longitude=78.96&depth=0-5cm"
+```
+
+#### Normalized Response (`200 OK`)
+```json
+{
+  "latitude": 20.59,
+  "longitude": 78.96,
+  "depth_interval": "0-5cm",
+  "soil": {
+    "ph": 7.2,
+    "clay_pct": 42.1,
+    "sand_pct": 19.4,
+    "silt_pct": 38.5,
+    "organic_carbon_g_kg": 12.1,
+    "bulk_density": 1.63,
+    "cec": 42.6,
+    "nitrogen_g_kg": 1.34
+  },
+  "data_source": "ISRIC SoilGrids 2.0",
+  "resolution_m": 250,
+  "disclaimer": "SoilGrids predictions represent 250m resolution regional estimates and do not replace on-farm laboratory soil testing. Provided under CC BY 4.0 by ISRIC."
+}
+```
+
+---
+
+### 7. Error Handling & No Fake Data Policy
+
+The soil service adheres to a strict **zero-fake-data policy**:
+- If coordinates fall outside SoilGrids coverage (e.g., oceans, water bodies, or unmodeled land masks), it returns `404 Not Found` with a clear explanation:
+  `"No soil data available from SoilGrids for the requested coordinates (location may be a water body, unmodeled area, or outside coverage)."`
+- Upstream network errors and timeouts return appropriate HTTP status codes:
+
+| Condition | Status Code | Detail Message |
+| :--- | :--- | :--- |
+| Latitude out of bounds (`<-90` or `>90`) | `400 Bad Request` | `"Latitude must be between -90.0 and 90.0 degrees."` |
+| Longitude out of bounds (`<-180` or `>180`) | `400 Bad Request` | `"Longitude must be between -180.0 and 180.0 degrees."` |
+| Unsupported depth interval | `400 Bad Request` | `"Unsupported depth interval '...'. Supported intervals: 0-5cm, ..."` |
+| Water body / unmodeled mask | `404 Not Found` | `"No soil data available from SoilGrids for the requested coordinates..."` |
+| Upstream rate limit exceeded | `429 Too Many Requests` | `"Soil data provider rate limit exceeded. Please try again later adhering to fair use."` |
+| Malformed response from provider | `502 Bad Gateway` | `"Soil data provider returned an unexpected or malformed response."` |
+| Upstream provider outage (5xx/connection failure) | `503 Service Unavailable` | `"Soil data service is temporarily unavailable due to upstream connectivity or server issues."` |
+| Upstream request timeout | `504 Gateway Timeout` | `"Soil data service timed out while querying SoilGrids provider."` |
+
+---
+
+### 8. Limitations & Future Roadmap
+- **Resolution Limit**: SoilGrids provides ~250m regional statistical predictions. It provides macroscopic soil context but does not replace laboratory physical/chemical soil test assays.
+- **Point Lookup MVP**: Currently supports point coordinate queries. Future phases will support field polygon zonal averaging via GeoJSON.
+- **Multi-Source ML Integration**: Soil properties will be coupled with weather observations, satellite vegetation indices, and historical yield data in future feature engineering phases.

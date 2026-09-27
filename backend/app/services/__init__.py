@@ -24,6 +24,26 @@ from app.services.satellite_service import (
     compute_ndwi,
     compute_ndmi,
 )
+from app.services.soil_provider import (
+    BaseSoilProvider,
+    SoilGridsProvider,
+    SOILGRIDS_PROPERTIES,
+    SUPPORTED_DEPTH_INTERVALS,
+    SoilProviderError,
+    SoilProviderTimeoutError,
+    SoilProviderConnectionError,
+    SoilProviderRateLimitError,
+    SoilProviderUnavailableError,
+    MalformedSoilResponseError,
+    NoSoilDataError,
+)
+from app.services.soil_service import (
+    SoilService,
+    soil_service,
+    SoilServiceError,
+    InvalidDepthError,
+    validate_depth,
+)
 
 __all__ = [
     "WeatherService",
@@ -46,4 +66,20 @@ __all__ = [
     "compute_ndvi",
     "compute_ndwi",
     "compute_ndmi",
+    "BaseSoilProvider",
+    "SoilGridsProvider",
+    "SOILGRIDS_PROPERTIES",
+    "SUPPORTED_DEPTH_INTERVALS",
+    "SoilProviderError",
+    "SoilProviderTimeoutError",
+    "SoilProviderConnectionError",
+    "SoilProviderRateLimitError",
+    "SoilProviderUnavailableError",
+    "MalformedSoilResponseError",
+    "NoSoilDataError",
+    "SoilService",
+    "soil_service",
+    "SoilServiceError",
+    "InvalidDepthError",
+    "validate_depth",
 ]

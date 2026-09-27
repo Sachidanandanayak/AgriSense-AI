@@ -4,7 +4,7 @@
 
 ---
 
-> **Current Development Status:** **Phase 5 — Satellite Data Integration**
+> **Current Development Status:** **Phase 6 — Soil & Geospatial Data Integration**
 
 ---
 
@@ -118,15 +118,17 @@ AgriSense-AI/
 
 ## 🚀 Current Milestone
 
-> **Phase 5 — Satellite Data Integration**  
-> Integrated Google Earth Engine (Sentinel-2 Harmonized Surface Reflectance `COPERNICUS/S2_SR_HARMONIZED` + `COPERNICUS/S2_CLOUD_PROBABILITY`). Implemented pixel-level cloud probability filtering, temporal median compositing, and regional zonal aggregation for key agricultural indices:
-> - **NDVI**: $(B8 - B4) / (B8 + B4)$ (Canopy vigor and density)
-> - **NDWI (McFeeters 1996)**: $(B3 - B8) / (B3 + B8)$ (Surface water bodies and water-logging)
-> - **NDMI (Gao 1996)**: $(B8 - B11) / (B8 + B11)$ (Canopy moisture content and leaf water stress)
+> **Phase 6 — Soil & Geospatial Data Integration**  
+> Integrated ISRIC SoilGrids 2.0 digital soil mapping (~250m global resolution, CC BY 4.0) via a decoupled provider architecture (`BaseSoilProvider` -> `SoilGridsProvider`). Retrieves and normalizes key physical and chemical soil properties across standard depth intervals (`0-5cm` default topsoil):
+> - **Soil pH**: Measured in $1:5$ $\text{H}_2\text{O}$ solution (converted from $\text{pH}\times 10$)
+> - **Texture Percentages**: Clay ($< 2\,\mu\text{m}$), Sand ($50–2000\,\mu\text{m}$), Silt ($2–50\,\mu\text{m}$) in % ($\text{g}/100\text{g}$)
+> - **Soil Organic Carbon (SOC)**: Converted from $\text{dg/kg}$ to $\text{g/kg}$
+> - **Bulk Density**: Converted from $\text{cg/cm}^3$ to $\text{kg/dm}^3$
+> - **Cation Exchange Capacity (CEC)**: Converted from $\text{mmol}(c)/\text{kg}$ to $\text{cmol}(c)/\text{kg}$
+> - **Total Nitrogen**: Converted from $\text{cg/kg}$ to $\text{g/kg}$
 > 
-> Exposed through `GET /api/satellite` with configurable point analysis radius (default 500m) and cloud probability threshold (default 65%).
+> Exposed through `GET /api/soil` with strict input boundary validations and zero synthetic data fallbacks.
 > 
 > **Important Disclaimers:**
-> - *"The current implementation uses a point-centered analysis radius and therefore does not represent an exact farm boundary."*
-> - *"Satellite indices are environmental indicators and are not direct crop-suitability scores."*
-> - *Satellite data is currently DATA INFRASTRUCTURE; the baseline ML model has NOT been retrained or modified.*
+> - *"SoilGrids predictions represent 250m resolution regional estimates and do not replace on-farm laboratory soil testing."*
+> - *Soil data is currently DATA INFRASTRUCTURE; the baseline ML model has NOT been retrained or modified.*
