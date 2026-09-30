@@ -15,6 +15,16 @@ from app.services.feature_engineering.schemas import (
     FEATURE_COLUMN_ORDER,
 )
 
+from app.schemas.recommendation import (
+    AgriculturalInput,
+    CropRecommendationItem,
+    DataQualityReport,
+    EnvironmentalContext,
+    MANDATORY_DISCLAIMER,
+    RecommendationRequest,
+    RecommendationResponse,
+)
+
 __all__ = [
     "WeatherResponse",
     "SatelliteResponse",
@@ -30,5 +40,12 @@ __all__ = [
     "SoilFeatures",
     "DerivedAgronomicFeatures",
     "FEATURE_COLUMN_ORDER",
+    "AgriculturalInput",
+    "CropRecommendationItem",
+    "DataQualityReport",
+    "EnvironmentalContext",
+    "MANDATORY_DISCLAIMER",
+    "RecommendationRequest",
+    "RecommendationResponse",
 ]
 
