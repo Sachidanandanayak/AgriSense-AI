@@ -4,7 +4,7 @@ The backend of **AgriSense AI** provides the core RESTful API services that powe
 
 ---
 
-> **Current Milestone:** **Phase 6 — Soil & Geospatial Data Integration**
+> **Current Milestone:** **Phase 7 — Multi-Source Feature Engineering**
 
 ---
 
@@ -518,4 +518,191 @@ The soil service adheres to a strict **zero-fake-data policy**:
 ### 8. Limitations & Future Roadmap
 - **Resolution Limit**: SoilGrids provides ~250m regional statistical predictions. It provides macroscopic soil context but does not replace laboratory physical/chemical soil test assays.
 - **Point Lookup MVP**: Currently supports point coordinate queries. Future phases will support field polygon zonal averaging via GeoJSON.
-- **Multi-Source ML Integration**: Soil properties will be coupled with weather observations, satellite vegetation indices, and historical yield data in future feature engineering phases.
+- **Multi-Source ML Integration**: Soil properties are unified into multi-source feature representations in Phase 7 without retraining the baseline ML model.
+
+---
+
+## 🧬 Phase 7: Multi-Source Feature Engineering
+
+### 1. Purpose & Scope
+Phase 7 establishes a modular, reproducible, and leakage-free feature-engineering architecture that combines:
+1. Historical agricultural measurements (`N`, `P`, `K`, `temperature`, `humidity`, `ph`, `rainfall`)
+2. Meteorological observations (2m air temperature, relative humidity, precipitation, wind speed)
+3. Satellite earth observation indices (Sentinel-2 NDVI, NDWI, NDMI, scene counts, cloud thresholds)
+4. Digital soil mapping properties (ISRIC SoilGrids pH, texture %, SOC, bulk density, CEC, Nitrogen)
+
+into a single normalized representation (`MultiSourceObservation`) and deterministic ML feature vector (`MultiSourceFeatureVector`).
+
+```text
+RAW SOURCES (Agri, Weather, Satellite, Soil)
+                    ↓
+           Source Normalization
+                    ↓
+          Validation & Screening
+       (Spatial bounds & Temporal window)
+                    ↓
+        Spatial & Temporal Alignment
+       (Strict key verification / rejection)
+                    ↓
+       Feature Engineering & Derivation
+       (Zero-denominator protected ratios)
+                    ↓
+          Unified Feature Schema
+                    ↓
+     Future ML Model (Phase 8 & Beyond)
+```
+
+**Scope Protection**: Phase 7 does **NOT** retrain or replace the baseline Random Forest model, does **NOT** modify existing model weights (`backend/ml/models/crop_recommendation_model.joblib`), does **NOT** alter model evaluation metrics (`metrics.json`), and does **NOT** build the final recommendation API endpoint (Phase 8).
+
+---
+
+### 2. Four Data Sources & Responsibilities
+Each external integration layer retains strict functional separation:
+- **Weather Service (`WeatherService`)**: Responsible exclusively for querying Open-Meteo and returning normalized meteorological values (`WeatherResponse`).
+- **Satellite Service (`SatelliteService`)**: Responsible exclusively for querying Google Earth Engine Sentinel-2 imagery, cloud screening, zonal reduction, and index computation (`SatelliteResponse`).
+- **Soil Service (`SoilService` & `SoilGridsProvider`)**: Responsible exclusively for querying ISRIC SoilGrids 2.0 REST API, depth validation, and property normalization (`SoilResponse`).
+- **Feature Engineering Layer (`backend/app/services/feature_engineering/`)**: Responsible exclusively for multi-source ingestion, cross-source spatial alignment, temporal coherence verification, nutrient ratio derivation, target isolation, and deterministic feature vector assembly.
+
+---
+
+### 3. Spatial Alignment Rules & Assumptions
+- **WGS84 Validation**: Primary target coordinates must satisfy $-90.0 \le \text{latitude} \le 90.0$ and $-180.0 \le \text{longitude} \le 180.0$.
+- **Configurable Engineering Alignment Tolerance**: Default cross-source spatial tolerance is **$0.005^\circ$** ($\approx 550\,\text{m}$ at equator), configurable via `FEATURE_SPATIAL_TOLERANCE_DEG` or call-time arguments.
+  - *Engineering Purpose*: Accommodates floating-point coordinate precision and provider grid-centroid snapping (~250m for SoilGrids raster cells, ~500m for Sentinel-2 buffer queries).
+  - *Anti-Equivalence Caveat*: This is an **engineering alignment tolerance**, NOT an assertion of farm-boundary accuracy. Cross-source observations within tolerance do **NOT** claim to represent the exact same cadastral farm parcel.
+  - Spatial mismatch beyond tolerance (e.g. Weather from Delhi and Satellite from Bangalore) is caught and rejected with `SpatialAlignmentError`.
+- **Explicit Spatial Caveats**:
+  - *Satellite*: Uses a point-centered circular buffer (default 500m radius), which is an environmental proxy and does **not** represent an exact farm cadastral boundary.
+  - *Soil*: Uses ISRIC SoilGrids 2.0 digital soil mapping predictions at 250m grid resolution, which are regional estimates and do **not** replace laboratory soil testing.
+  - *Weather*: Uses Open-Meteo atmospheric model grid interpolation for the requested coordinates.
+
+---
+
+### 4. Temporal Alignment Rules & Handling of Static vs Dynamic Data
+- **Dynamic Meteorological Observations**: Weather has an instantaneous or forecast timestamp (`weather_timestamp`).
+- **Aggregated Satellite Composites**: Sentinel-2 data is aggregated over an explicit compositing window (`start_date` to `end_date`, requiring $\text{start\_date} \le \text{end\_date}$).
+- **Static Pedological Context**: ISRIC SoilGrids data represents static digital soil mapping predictions for specific depth intervals (`0-5cm` default). **Soil data is never assigned an invented observation date.**
+- **Configurable Engineering Temporal Margins**:
+  - *Satellite Window Margin*: Default **14 days** (`FEATURE_SATELLITE_MAX_WINDOW_DAYS`), accommodating Sentinel-2's ~5-day orbital revisit to obtain 2-3 cloud-screened scenes.
+  - *Weather Observation Gap*: Default **7 days** (`FEATURE_WEATHER_MAX_GAP_DAYS`), defining allowable temporal proximity around an observation date.
+  - *Caveat*: These are **engineering alignment tolerances** for remote-sensing revisits and meteorological indexing, NOT universal agronomic constants across disparate crop phenological cycles.
+- **Anti-Leakage Enforcement**:
+  - Observations occurring strictly in the future relative to `observation_date` (e.g. satellite window starting after planting date, or future weather timestamps) are strictly rejected with `TemporalAlignmentError` to prevent forward information leakage into prediction-time feature sets.
+
+
+---
+
+### 5. Feature Normalization & Disambiguation
+To eliminate duplicate ambiguous field names across sources, all features are explicitly prefixed and disambiguated:
+- `historical_temperature` (seasonal mean from crop dataset) vs `weather_temperature` (air temperature from meteorological service).
+- `historical_humidity` (mean relative humidity from crop dataset) vs `weather_humidity` (meteorological relative humidity %).
+- `historical_rainfall` (seasonal cumulative precipitation) vs `weather_precipitation` (meteorological rainfall depth).
+- `historical_ph` (measured soil pH from crop dataset) vs `soil_ph` (SoilGrids digital soil map pH).
+- `nitrogen` (available N from fertilizer/soil test) vs `soil_nitrogen_g_kg` (total fine-earth N from SoilGrids).
+
+No source silently overwrites another.
+
+---
+
+### 6. Scientifically Defensible Derived Agronomic Features
+Nutrient stoichiometry and balance ratios are computed using `safe_ratio()`:
+- **$N/P$ Ratio**: $\text{Nitrogen} / \text{Phosphorus}$
+- **$N/K$ Ratio**: $\text{Nitrogen} / \text{Potassium}$
+- **$P/K$ Ratio**: $\text{Phosphorus} / \text{Potassium}$
+
+**Anti-Fabrication & Zero-Denominator Policy**:
+- When a denominator is zero, negative, or missing, the derived ratio evaluates strictly to `None` (null).
+- No arbitrary epsilon, synthetic zero, mean, or median is injected into the feature representation during Phase 7.
+- Satellite indices (NDVI, NDWI, NDMI) preserve their original mathematical formulas and $[-1.0, 1.0]$ bounds. They are **never** reinterpreted as arbitrary crop suitability percentages.
+
+---
+
+### 7. Missing-Data Policy
+- Missing values across all sources (e.g., failed weather API call, cloud-obscured satellite composite, unmodeled SoilGrids point) are **explicitly preserved as `None` (null)**.
+- Imputation (mean, median, KNN, iterative) is intentionally deferred to the future ML model training pipeline where an explicit, cross-validated imputation strategy can be formally defined.
+
+---
+
+### 8. Data Leakage Prevention
+- **Supervised Target Isolation**: The ground-truth crop classification label (`crop_label` / `label`) is strictly separated from feature vectors.
+- `to_feature_dict(include_target=False)` and `to_feature_vector()` completely omit `crop_label`.
+- `validate_no_target_leakage()` proactively scans feature dictionaries and raises `DataLeakageError` if target keys (`crop_label`, `label`, `target`, `crop`) are present in prediction inputs.
+- Metadata (coordinates, timestamps, data providers) are strictly excluded from prediction vectors.
+
+---
+
+### 9. Historical Dataset Limitations & Anti-Fabrication Rule
+> **"The current benchmark agricultural dataset lacks the geospatial and temporal keys required to legitimately join live weather, satellite, and soil observations. Therefore, Phase 7 creates the multi-source feature contract and alignment infrastructure without fabricating historical environmental observations."**
+
+The raw benchmark dataset (`backend/data/raw/Crop_recommendation.csv`) contains 2,200 records across 22 crops, but lacks farmer GPS coordinates, planting dates, and farm boundaries.
+- **Strict Anti-Fabrication**: We do **not** assign arbitrary coordinates, today's weather, or SoilGrids predictions to historical rows.
+- **Dataset Immutability**: `backend/data/raw/Crop_recommendation.csv` remains strictly unchanged.
+
+---
+
+### 10. Machine-Readable Feature Schema
+The complete schema contract is defined in `backend/ml/datasets/multisource_feature_schema.json`, documenting all 27 input features, data types, units, physical meanings, spatial/temporal meanings, and anti-leakage policies:
+
+| Index | Feature Name | Source | Datatype | Unit | Nature |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| 1 | `nitrogen` | Agricultural | float | kg/ha | Raw |
+| 2 | `phosphorus` | Agricultural | float | kg/ha | Raw |
+| 3 | `potassium` | Agricultural | float | kg/ha | Raw |
+| 4 | `historical_temperature` | Agricultural | float | °C | Raw |
+| 5 | `historical_humidity` | Agricultural | float | % | Raw |
+| 6 | `historical_ph` | Agricultural | float | pH scale (0-14) | Raw |
+| 7 | `historical_rainfall` | Agricultural | float | mm | Raw |
+| 8 | `n_p_ratio` | Derived | float | ratio | Derived |
+| 9 | `n_k_ratio` | Derived | float | ratio | Derived |
+| 10 | `p_k_ratio` | Derived | float | ratio | Derived |
+| 11 | `weather_temperature` | Weather | float | °C | Raw |
+| 12 | `weather_humidity` | Weather | float | % | Raw |
+| 13 | `weather_precipitation` | Weather | float | mm | Raw |
+| 14 | `weather_wind_speed` | Weather | float | m/s | Raw |
+| 15 | `satellite_ndvi` | Satellite | float | index (-1 to 1) | Derived |
+| 16 | `satellite_ndwi` | Satellite | float | index (-1 to 1) | Derived |
+| 17 | `satellite_ndmi` | Satellite | float | index (-1 to 1) | Derived |
+| 18 | `satellite_usable_observations` | Satellite | int | count | Raw |
+| 19 | `satellite_cloud_probability_threshold` | Satellite | float | % | Raw |
+| 20 | `soil_ph` | Soil | float | pH scale (0-14) | Raw |
+| 21 | `soil_clay_pct` | Soil | float | % | Raw |
+| 22 | `soil_sand_pct` | Soil | float | % | Raw |
+| 23 | `soil_silt_pct` | Soil | float | % | Raw |
+| 24 | `soil_organic_carbon_g_kg` | Soil | float | g/kg | Raw |
+| 25 | `soil_bulk_density` | Soil | float | kg/dm³ | Raw |
+| 26 | `soil_cec` | Soil | float | cmol(c)/kg | Raw |
+| 27 | `soil_nitrogen_g_kg` | Soil | float | g/kg | Raw |
+
+---
+
+### 11. Deterministic Feature Vector Generation
+The builder produces an ordered list of 27 values via `to_feature_vector()` that guarantees deterministic consistency across repeated calls, with zero metadata and zero target contamination:
+
+```python
+from app.services.feature_engineering import feature_builder
+
+obs = feature_builder.build_unified_observation(
+    latitude=16.20,
+    longitude=77.35,
+    observation_date="2026-09-25",
+    weather=weather_response,
+    satellite=satellite_response,
+    soil=soil_response,
+    agricultural_data={"N": 80.0, "P": 40.0, "K": 40.0},
+)
+
+# Extract deterministic ML feature vector (27 elements)
+feature_vector = obs.to_feature_vector()
+```
+
+---
+
+### 12. Automated Testing & Verification
+The test suite in `backend/tests/test_feature_engineering.py` covers all Phase 7 validation requirements and runs as part of the unified test suite (136 tests total):
+```powershell
+python -m unittest discover -s backend/tests -p "test_*.py"
+# Ran 136 tests in ~2s - OK (skipped=2)
+```
+
+
+

@@ -57,5 +57,17 @@ class Settings:
     )
     SOIL_DEFAULT_DEPTH: str = os.getenv("SOIL_DEFAULT_DEPTH", "0-5cm")
 
+    # Multi-Source Feature Engineering Alignment Settings
+    FEATURE_SPATIAL_TOLERANCE_DEG: float = float(
+        os.getenv("FEATURE_SPATIAL_TOLERANCE_DEG", "0.005")
+    )
+    FEATURE_SATELLITE_MAX_WINDOW_DAYS: int = int(
+        os.getenv("FEATURE_SATELLITE_MAX_WINDOW_DAYS", "14")
+    )
+    FEATURE_WEATHER_MAX_GAP_DAYS: int = int(
+        os.getenv("FEATURE_WEATHER_MAX_GAP_DAYS", "7")
+    )
+
 
 settings = Settings()
+
