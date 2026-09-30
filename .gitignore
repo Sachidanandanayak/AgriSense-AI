@@ -32,6 +32,13 @@ venv.bak/
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+*service_account*.json
+*service-account*.json
+*credentials*.json
+ee-key*.json
+gcp-key*.json
 
 # IDEs and Editors
 .vscode/

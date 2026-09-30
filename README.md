@@ -4,7 +4,7 @@
 
 ---
 
-> **Current Development Status:** **Phase 1 — Backend Foundation**
+> **Current Development Status:** **Phase 7 — Multi-Source Feature Engineering**
 
 ---
 
@@ -54,16 +54,19 @@ The platform architecture is designed across several core functional modules:
 - **5. Historical Agricultural Data Layer**  
   Correlates regional agro-climatic zones, historical crop yield statistics, and seasonal crop calendars.
 
-- **6. Machine Learning Engine**  
+- **6. Multi-Source Feature Engineering Engine (Phase 7)**  
+  Normalizes, aligns (spatially & temporally), validates, and constructs deterministic feature vectors across agricultural, meteorological, satellite, and soil sources without data leakage or fabrication.
+
+- **7. Machine Learning Engine**  
   Trained on multi-dimensional agro-climatic datasets to predict crop suitability classifications, yield potential tiers, and viability scores.
 
-- **7. Crop Recommendation & Advisory System**  
+- **8. Crop Recommendation & Advisory System**  
   Generates ranked recommendations alongside expected growing periods, water budgets, and optimal sowing windows.
 
-- **8. Environmental Risk Analysis**  
+- **9. Environmental Risk Analysis**  
   Evaluates environmental vulnerability—such as late-season heat stress, flood vulnerability, or prolonged dry spells—and provides mitigation advisories.
 
-- **9. Farmer Dashboard (Frontend)**  
+- **10. Farmer Dashboard (Frontend)**  
   A clean, intuitive, and responsive web interface designed to present complex geospatial insights through clear visual cards, charts, maps, and straightforward advisory summaries.
 
 ---
@@ -76,9 +79,11 @@ The platform architecture is designed across several core functional modules:
 | **Data Processing & ML** | NumPy, Pandas, Scikit-learn, XGBoost / LightGBM, Joblib |
 | **Geospatial & Satellite** | Earth Engine API / Sentinel Hub / Planetary Computer, Rasterio, GeoPandas |
 | **Weather APIs** | Open-Meteo / NASA POWER / NOAA APIs |
+| **Soil Providers** | ISRIC SoilGrids 2.0 REST API |
+| **Feature Engineering** | Pydantic V2 Schemas, Domain-Specific Stoichiometric Ratios, Spatial/Temporal Validators |
 | **Frontend** | Modern Web Framework (React / Next.js / Vite), Responsive CSS |
 | **Storage & Caching** | PostgreSQL / PostGIS (Planned), Redis (Planned) |
-| **Testing & CI** | Pytest, Flake8 / Ruff |
+| **Testing & CI** | Unittest, Pytest |
 
 ---
 
@@ -92,23 +97,35 @@ AgriSense-AI/
 │   │   ├── main.py              # FastAPI application entry point
 │   │   ├── api/                 # API router configurations
 │   │   │   ├── __init__.py
-│   │   │   └── routes/          # Versioned route endpoints
+│   │   │   └── routes/          # Versioned route endpoints (weather, satellite, soil)
 │   │   ├── core/                # App configuration, settings, logging
 │   │   ├── models/              # Internal domain models
 │   │   ├── schemas/             # Pydantic validation schemas
-│   │   ├── services/            # Business logic (weather, satellite, crop analysis)
+│   │   ├── services/            # Business logic services
+│   │   │   ├── weather_service.py
+│   │   │   ├── satellite_service.py
+│   │   │   ├── soil_service.py
+│   │   │   ├── soil_provider.py
+│   │   │   └── feature_engineering/ # Multi-source feature orchestration (Phase 7)
+│   │   │       ├── __init__.py
+│   │   │       ├── schemas.py      # Unified multi-source contracts
+│   │   │       ├── normalizer.py   # Source normalization
+│   │   │       ├── builder.py      # Feature engineering builder
+│   │   │       └── validators.py   # Spatial/temporal/leakage validation
 │   │   └── utils/               # Shared helpers and formatters
-│   ├── tests/                   # Backend automated test suite
+│   ├── tests/                   # Backend automated test suite (136 tests)
+
+
 │   ├── data/
-│   │   ├── raw/                 # Raw agricultural and spatial data
-│   │   └── processed/           # Feature-engineered datasets
+│   │   ├── raw/                 # Raw agricultural benchmark data (Crop_recommendation.csv)
+│   │   └── processed/           # Feature-engineered splits & boundary docs
 │   ├── ml/
-│   │   ├── datasets/            # Training/evaluation datasets
+│   │   ├── datasets/            # multisource_feature_schema.json
 │   │   ├── notebooks/           # Exploratory data analysis & model experiments
-│   │   ├── models/              # Serialized trained model weights/artifacts
-│   │   └── scripts/             # Training, evaluation, and export pipelines
+│   │   ├── models/              # Baseline Random Forest model (unchanged)
+│   │   └── scripts/             # Validation and preparation pipelines
 │   ├── requirements.txt         # Python dependencies
-│   └── README.md                # Backend-specific documentation
+│   └── README.md                # Detailed backend documentation
 ├── frontend/                    # Web dashboard (to be built in upcoming phases)
 ├── .gitignore                   # Version control ignore rules
 └── README.md                    # Project documentation
@@ -116,7 +133,22 @@ AgriSense-AI/
 
 ---
 
-## 🚀 Current Milestone
+## 🚀 Current Milestone: Phase 7 — Multi-Source Feature Engineering
 
-> **Phase 1 — Backend Foundation**  
-> Initializing the professional repository structure, establishing clean architectural separation of concerns, and configuring a minimal, high-performance FastAPI backend scaffold with health checks and API documentation.
+> **Phase 7 Objective:**  
+> Create a clean, reproducible, and leakage-free feature-engineering architecture that unifies:
+> 1. **Historical agricultural data** (N, P, K, pH, rainfall, temperature, humidity)
+> 2. **Weather data** (2m air temperature, relative humidity, precipitation, 10m wind speed)
+> 3. **Satellite-derived indicators** (Sentinel-2 NDVI, NDWI, NDMI, scene counts, cloud thresholds)
+> 4. **Soil properties** (ISRIC SoilGrids pH, clay, sand, silt %, SOC, bulk density, CEC, Nitrogen)
+>
+> into a standardized, deterministic multi-source feature representation (`MultiSourceObservation` / `MultiSourceFeatureVector`).
+
+### Critical Architectural Boundary & Anti-Fabrication Rule
+> **"The current benchmark agricultural dataset lacks the geospatial and temporal keys required to legitimately join live weather, satellite, and soil observations. Therefore, Phase 7 creates the multi-source feature contract and alignment infrastructure without fabricating historical environmental observations."**
+
+- **Zero Synthetic Alignment**: Historical rows are never assigned arbitrary coordinates, today's weather, or SoilGrids predictions.
+- **Strict Leakage Prevention**: Ground-truth target labels (`crop_label`) are strictly isolated from ML prediction feature vectors.
+- **Scientifically Defensible Derived Ratios**: Nutrient ratios ($N/P$, $N/K$, $P/K$) are protected against division-by-zero, returning `None` instead of synthetic zeros or averages.
+- **Model Preservation**: The existing Phase 3 Random Forest model artifact, metrics, and report remain 100% immutable and un-retrained.
+
