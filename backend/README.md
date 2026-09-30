@@ -4,7 +4,7 @@ The backend of **AgriSense AI** provides the core RESTful API services that powe
 
 ---
 
-> **Current Milestone:** **Phase 7 — Multi-Source Feature Engineering**
+> **Current Milestone:** **Phase 8 — Crop Suitability & Recommendation Engine**
 
 ---
 
@@ -19,6 +19,7 @@ The backend of **AgriSense AI** provides the core RESTful API services that powe
 | `GET` | `/api/weather` | Current Normalized Weather Observations | `?latitude=16.20&longitude=77.35` |
 | `GET` | `/api/satellite` | Sentinel-2 Vegetation & Moisture Indices | `?latitude=16.20&longitude=77.35&start_date=2026-09-01&end_date=2026-09-25` |
 | `GET` | `/api/soil` | Normalized Soil Properties & Texture | `?latitude=20.59&longitude=78.96&depth=0-5cm` |
+| `POST` | `/api/recommendations` | Ranked Crop Recommendations with Context | JSON body with coordinates, agricultural inputs, optional context |
 
 ---
 
@@ -698,11 +699,276 @@ feature_vector = obs.to_feature_vector()
 ---
 
 ### 12. Automated Testing & Verification
-The test suite in `backend/tests/test_feature_engineering.py` covers all Phase 7 validation requirements and runs as part of the unified test suite (136 tests total):
+The test suite in `backend/tests/test_feature_engineering.py` covers all Phase 7 validation requirements and runs as part of the unified test suite:
 ```powershell
 python -m unittest discover -s backend/tests -p "test_*.py"
-# Ran 136 tests in ~2s - OK (skipped=2)
 ```
+
+---
+
+## 🌾 Phase 8: Crop Suitability & Recommendation Engine
+
+> [!IMPORTANT]
+> ### Mandatory Scientific Notice
+> **"The current recommendation engine is a benchmark-model recommendation layer augmented with environmental context. It is not yet a field-validated crop suitability or yield prediction system."**
+
+Phase 8 builds the first production-oriented Crop Suitability & Recommendation Engine for AgriSense AI. It orchestrates the benchmark machine learning model, live meteorological feeds, Sentinel-2 satellite observations, ISRIC SoilGrids digital soil mapping, and the Phase 7 multi-source feature alignment layer to deliver transparent, data-grounded crop recommendations.
+
+---
+
+### 1. Architecture & Orchestration Flow
+
+```text
+Farmer Query: Coordinates (lat, lon), Reference Date, Agricultural Inputs (N, P, K, temp, hum, pH, rain)
+                                          │
+                    ┌─────────────────────┴─────────────────────┐
+                    ▼                                           ▼
+      Optional Live Weather Query                Optional Live Satellite Query
+        (Open-Meteo REST API)                      (Sentinel-2 / Earth Engine)
+                    │                                           │
+                    └─────────────────────┬─────────────────────┘
+                                          ▼
+                               Optional Soil Query
+                           (ISRIC SoilGrids 2.0 API)
+                                          │
+                                          ▼
+                     Multi-Source Spatial & Temporal Alignment
+                     (Phase 7 MultiSourceFeatureBuilder Layer)
+                                          │
+                    ┌─────────────────────┴─────────────────────┐
+                    ▼                                           ▼
+         [A] Model Input Adapter                     [B] Environmental Context
+   - Extracts 7 agricultural inputs             - Attaches live/cached weather
+   - Computes 4 stoichiometric ratios           - Attaches Sentinel-2 indices (NDVI/NDWI/NDMI)
+   - Enforces exact 11 training columns         - Attaches SoilGrids texture & organic carbon
+   - Validates no missing values                - Computes missing sources & quality audit
+                    │                                           │
+                    ▼                                           │
+     Benchmark Random Forest Model                              │
+      (crop_recommendation_model.joblib)                        │
+   - Runs model.predict_proba()                                 │
+   - Top-K deterministic rank sort                              │
+   - Outputs probability_estimate                               │
+                    │                                           │
+                    └─────────────────────┬─────────────────────┘
+                                          ▼
+                        Explanation & Limitations Layer
+                    - Data-grounded explanatory notes
+                    - Explicit operational & agronomic caveats
+                    - Zero fabricated fallback values
+                                          │
+                                          ▼
+                      Farmer-Facing Recommendation Response
+                             (POST /api/recommendations)
+```
+
+---
+
+### 2. Model Compatibility Boundary & Feature Schema
+
+The existing Random Forest model (`backend/ml/models/crop_recommendation_model.joblib`) was trained on the benchmark agricultural dataset (`Crop_recommendation.csv`) and expects **exactly 11 features in a precise sequence**.
+
+The Phase 7 feature engineering layer defines 27 multi-source environmental features. To preserve data integrity and prevent runtime crashes, the recommendation engine implements an explicit adapter boundary (`CropModelAdapter`):
+
+| Schema Category | Feature Count | Features Included | Role in Engine |
+| :--- | :--- | :--- | :--- |
+| **A. Model Input Features** | **11** | `N`, `P`, `K`, `temperature`, `humidity`, `ph`, `rainfall`, `N_P_ratio`, `N_K_ratio`, `P_K_ratio`, `rain_temp_ratio` | Consumed directly by `RandomForestClassifier.predict_proba()` |
+| **B. Environmental Context Features** | **16** | `weather_temperature`, `weather_humidity`, `weather_precipitation`, `weather_wind_speed`, `satellite_ndvi`, `satellite_ndwi`, `satellite_ndmi`, `satellite_usable_observations`, `satellite_cloud_probability_threshold`, `soil_ph`, `soil_clay_pct`, `soil_sand_pct`, `soil_silt_pct`, `soil_organic_carbon_g_kg`, `soil_bulk_density`, `soil_cec`, `soil_nitrogen_g_kg` | Preserved for contextual enrichment, field vigor indicators, and transparent explanations |
+
+#### Ratio Computation in Model Adapter
+Consistent with training data preparation (`backend/ml/scripts/prepare_data.py`), the adapter computes interaction ratios using $\epsilon = 10^{-5}$:
+- $N\_P\_ratio = N / (P + 10^{-5})$
+- $N\_K\_ratio = N / (K + 10^{-5})$
+- $P\_K\_ratio = P / (K + 10^{-5})$
+- $rain\_temp\_ratio = rainfall / (temperature + 10^{-5})$
+
+#### Strict Anti-Imputation Rule
+If any of the 7 baseline agricultural inputs ($N$, $P$, $K$, $temperature$, $humidity$, $pH$, $rainfall$) is missing or `None`, the adapter raises `MissingModelInputError` (HTTP 400). **Silent imputation of missing critical prediction inputs is strictly prohibited.**
+
+---
+
+### 3. Scientific Integrity & Terminology Standards
+
+To prevent misleading agricultural claims, AgriSense AI enforces rigorous terminology guidelines:
+
+| Prohibited Terminology | Approved Scientific Terminology | Rationale |
+| :--- | :--- | :--- |
+| ❌ "Crop suitability percentage" | ✅ **"model probability estimate"** | The benchmark model outputs class probability over benchmark feature space, not a field trial suitability score. |
+| ❌ "Harvest success probability" | ✅ **"benchmark-model confidence estimate"** | Harvest success depends on unmodelled factors (pests, irrigation, management, microclimates). |
+| ❌ "Yield probability" | ✅ **"model-ranked recommendation"** | Yield volume is not predicted by this classification model. |
+| ❌ "Satellite proves this crop is suitable" | ✅ **"contextual environmental indicators"** | Satellite NDVI/NDWI/NDMI indicate current vegetative vigor and moisture, not biological suitability. |
+
+---
+
+### 4. Data Provenance & Missing-Data Policy
+
+Every recommendation response audits data availability across all integrated providers:
+- `weather_available`: `true` if current meteorological observations were attached.
+- `satellite_available`: `true` if Sentinel-2 indices were attached.
+- `soil_available`: `true` if ISRIC SoilGrids data was attached.
+- `missing_sources`: Explicit list of unavailable data sources (e.g. `["weather", "satellite", "soil"]`).
+- **Zero Fabrication**: When an environmental source is unavailable, its response block is returned as `null`. No synthetic values, mock defaults, or fabricated numbers are ever inserted into production responses.
+
+---
+
+### 5. API Endpoint Specification
+
+#### `POST /api/recommendations`
+Generates top-K ranked crop recommendations with supporting environmental context.
+
+**Request Schema (`RecommendationRequest`)**:
+```json
+{
+  "latitude": 16.20,
+  "longitude": 77.35,
+  "observation_date": "2026-09-25",
+  "agricultural_inputs": {
+    "nitrogen": 90.0,
+    "phosphorus": 42.0,
+    "potassium": 43.0,
+    "temperature": 20.87,
+    "humidity": 82.0,
+    "ph": 6.5,
+    "rainfall": 202.93
+  },
+  "top_k": 3,
+  "fetch_live_weather": false,
+  "fetch_live_satellite": false,
+  "fetch_live_soil": false
+}
+```
+*(Note: Flat agricultural parameters at root level like `"nitrogen": 90.0` are also accepted and automatically resolved).*
+
+**Response Schema (`RecommendationResponse` - Illustrative Test Data)**:
+```json
+{
+  "latitude": 16.2,
+  "longitude": 77.35,
+  "observation_date": "2026-09-25",
+  "recommendations": [
+    {
+      "crop": "rice",
+      "rank": 1,
+      "probability_estimate": 0.88,
+      "confidence_percentage": "88.00%"
+    },
+    {
+      "crop": "jute",
+      "rank": 2,
+      "probability_estimate": 0.08,
+      "confidence_percentage": "8.00%"
+    },
+    {
+      "crop": "coconut",
+      "rank": 3,
+      "probability_estimate": 0.03,
+      "confidence_percentage": "3.00%"
+    }
+  ],
+  "environmental_context": {
+    "weather": {
+      "latitude": 16.2,
+      "longitude": 77.35,
+      "temperature_c": 28.4,
+      "humidity_percent": 64.0,
+      "rainfall_mm": 0.0,
+      "wind_speed_mps": 3.2,
+      "weather_timestamp": "2026-09-25T12:00"
+    },
+    "satellite": {
+      "latitude": 16.2,
+      "longitude": 77.35,
+      "radius_m": 500.0,
+      "start_date": "2026-09-11",
+      "end_date": "2026-09-25",
+      "usable_observations": 3,
+      "cloud_probability_threshold": 65.0,
+      "ndvi_median": 0.55,
+      "ndwi_median": 0.15,
+      "ndmi_median": 0.28,
+      "data_source": "Sentinel-2"
+    },
+    "soil": {
+      "latitude": 16.2,
+      "longitude": 77.35,
+      "depth_interval": "0-5cm",
+      "soil": {
+        "ph": 6.8,
+        "clay_pct": 35.0,
+        "sand_pct": 25.0,
+        "silt_pct": 40.0,
+        "organic_carbon_g_kg": 14.2,
+        "bulk_density": 1.45,
+        "cec": 28.5,
+        "nitrogen_g_kg": 1.2
+      },
+      "data_source": "ISRIC SoilGrids 2.0",
+      "resolution_m": 250
+    }
+  },
+  "data_quality": {
+    "model_available": true,
+    "model_version": "crop_recommendation_rf_v1",
+    "weather_available": true,
+    "satellite_available": true,
+    "soil_available": true,
+    "missing_sources": [],
+    "warnings": []
+  },
+  "explanation": [
+    "The benchmark Random Forest model ranked 'rice' highest (benchmark-model confidence estimate: 88.00%) for the supplied agricultural inputs (N=90.0 kg/ha, P=42.0 kg/ha, K=43.0 kg/ha, pH=6.5, temperature=20.87°C, rainfall=202.93 mm).",
+    "Secondary model-ranked alternatives: 'jute' (8.00%), 'coconut' (3.00%).",
+    "Current meteorological context: 28.4°C air temperature, 64.0% relative humidity, 0.0 mm precipitation, and 3.2 m/s wind speed at the target coordinates.",
+    "Sentinel-2 satellite observation (2026-09-11 to 2026-09-25) indicates median NDVI of 0.55, NDWI of 0.15, and NDMI of 0.28 within a 500m radius. These indices serve as contextual environmental indicators of current canopy vigor and moisture, not direct proof of crop suitability.",
+    "Digital soil mapping from ISRIC SoilGrids 2.0 at 0-5cm depth indicates soil pH 6.8, clay 35.0%, sand 25.0%, and organic carbon 14.2 g/kg."
+  ],
+  "limitations": [
+    "The current recommendation engine is a benchmark-model recommendation layer augmented with environmental context. It is not yet a field-validated crop suitability or yield prediction system.",
+    "Benchmark Model Scope: The existing classifier was trained on a 2,200-sample benchmark agricultural dataset under controlled trial conditions. Model probability estimates reflect classification likelihood across benchmark feature boundaries, NOT a guaranteed probability of successful harvest or commercial yield.",
+    "Environmental Context Function: Satellite remote sensing (NDVI, NDWI, NDMI) and meteorological feeds provide real-time environmental context. They do not constitute scientific proof of biological crop suitability or disease immunity.",
+    "Digital Soil Mapping Resolution: ISRIC SoilGrids 2.0 predictions represent 250m grid-scale spatial estimates. They do not replace certified on-farm laboratory soil testing.",
+    "Unmodelled Agronomic Risks: Field microclimates, frost pockets, pest and disease vectors, weed competition, seed variety differences, irrigation infrastructure, and market economic dynamics are not accounted for in this recommendation."
+  ],
+  "model_input_features": {
+    "N": 90.0,
+    "P": 42.0,
+    "K": 43.0,
+    "temperature": 20.87,
+    "humidity": 82.0,
+    "ph": 6.5,
+    "rainfall": 202.93,
+    "N_P_ratio": 2.1428,
+    "N_K_ratio": 2.093,
+    "P_K_ratio": 0.9767,
+    "rain_temp_ratio": 9.7231
+  },
+  "disclaimer": "The current recommendation engine is a benchmark-model recommendation layer augmented with environmental context. It is not yet a field-validated crop suitability or yield prediction system."
+}
+```
+
+#### HTTP Status Codes
+- `200 OK`: Successful ranked recommendations with environmental context.
+- `400 Bad Request`: Validation failure (coordinates out of bounds, invalid date, missing required agricultural inputs).
+- `422 Unprocessable Entity`: Malformed JSON or Pydantic type violations.
+- `503 Service Unavailable`: Trained model artifact missing or failed to initialize.
+- `500 Internal Server Error`: Server-side inference exception (clean message without leaking tracebacks).
+
+---
+
+### 6. Automated Testing Suite
+
+The Phase 8 test suite (`backend/tests/test_recommendation.py`) verifies all 21 functional, compatibility, and data integrity scenarios using isolated mocks for external network calls:
+```powershell
+python -m unittest backend/tests/test_recommendation.py
+# Ran 35 tests in 1.69s - OK
+```
+
+Full backend test suite execution (171 tests):
+```powershell
+python -m unittest discover -s backend/tests -p "test_*.py"
+# Ran 171 tests in 1.77s - OK (skipped=2)
+```
+
 
 
 

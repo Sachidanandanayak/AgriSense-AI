@@ -4,7 +4,7 @@
 
 ---
 
-> **Current Development Status:** **Phase 7 — Multi-Source Feature Engineering**
+> **Current Development Status:** **Phase 8 — Crop Suitability & Recommendation Engine**
 
 ---
 
@@ -60,8 +60,8 @@ The platform architecture is designed across several core functional modules:
 - **7. Machine Learning Engine**  
   Trained on multi-dimensional agro-climatic datasets to predict crop suitability classifications, yield potential tiers, and viability scores.
 
-- **8. Crop Recommendation & Advisory System**  
-  Generates ranked recommendations alongside expected growing periods, water budgets, and optimal sowing windows.
+- **8. Crop Recommendation & Advisory System (Phase 8)**  
+  Orchestrates the benchmark ML model with live/cached weather, Sentinel-2 satellite, and SoilGrids data to provide top-K ranked recommendations, model probability estimates, provenance, and data-grounded explanations.
 
 - **9. Environmental Risk Analysis**  
   Evaluates environmental vulnerability—such as late-season heat stress, flood vulnerability, or prolonged dry spells—and provides mitigation advisories.
@@ -97,7 +97,7 @@ AgriSense-AI/
 │   │   ├── main.py              # FastAPI application entry point
 │   │   ├── api/                 # API router configurations
 │   │   │   ├── __init__.py
-│   │   │   └── routes/          # Versioned route endpoints (weather, satellite, soil)
+│   │   │   └── routes/          # Endpoints: weather, satellite, soil, recommendations
 │   │   ├── core/                # App configuration, settings, logging
 │   │   ├── models/              # Internal domain models
 │   │   ├── schemas/             # Pydantic validation schemas
@@ -106,16 +106,19 @@ AgriSense-AI/
 │   │   │   ├── satellite_service.py
 │   │   │   ├── soil_service.py
 │   │   │   ├── soil_provider.py
-│   │   │   └── feature_engineering/ # Multi-source feature orchestration (Phase 7)
-│   │   │       ├── __init__.py
-│   │   │       ├── schemas.py      # Unified multi-source contracts
-│   │   │       ├── normalizer.py   # Source normalization
-│   │   │       ├── builder.py      # Feature engineering builder
-│   │   │       └── validators.py   # Spatial/temporal/leakage validation
+│   │   │   ├── feature_engineering/ # Multi-source feature orchestration (Phase 7)
+│   │   │   │   ├── schemas.py      # Unified multi-source contracts
+│   │   │   │   ├── normalizer.py   # Source normalization
+│   │   │   │   ├── builder.py      # Feature engineering builder
+│   │   │   │   └── validators.py   # Spatial/temporal/leakage validation
+│   │   │   └── recommendation/      # Production recommendation engine (Phase 8)
+│   │   │       ├── schemas.py      # Request/response contracts & advisory items
+│   │   │       ├── model_adapter.py# Safe 11-feature model adapter & probability estimator
+│   │   │       ├── recommendation_service.py # Orchestrator & environmental context
+│   │   │       ├── explanation.py  # Transparent explanations & limitations
+│   │   │       └── validators.py   # Boundary & non-null input validators
 │   │   └── utils/               # Shared helpers and formatters
-│   ├── tests/                   # Backend automated test suite (136 tests)
-
-
+│   ├── tests/                   # Backend automated test suite (171 tests passed)
 │   ├── data/
 │   │   ├── raw/                 # Raw agricultural benchmark data (Crop_recommendation.csv)
 │   │   └── processed/           # Feature-engineered splits & boundary docs
@@ -133,22 +136,23 @@ AgriSense-AI/
 
 ---
 
-## 🚀 Current Milestone: Phase 7 — Multi-Source Feature Engineering
+## 🚀 Current Milestone: Phase 8 — Crop Suitability & Recommendation Engine
 
-> **Phase 7 Objective:**  
-> Create a clean, reproducible, and leakage-free feature-engineering architecture that unifies:
-> 1. **Historical agricultural data** (N, P, K, pH, rainfall, temperature, humidity)
-> 2. **Weather data** (2m air temperature, relative humidity, precipitation, 10m wind speed)
-> 3. **Satellite-derived indicators** (Sentinel-2 NDVI, NDWI, NDMI, scene counts, cloud thresholds)
-> 4. **Soil properties** (ISRIC SoilGrids pH, clay, sand, silt %, SOC, bulk density, CEC, Nitrogen)
->
-> into a standardized, deterministic multi-source feature representation (`MultiSourceObservation` / `MultiSourceFeatureVector`).
+> **Mandatory Scientific Notice:**  
+> *"The current recommendation engine is a benchmark-model recommendation layer augmented with environmental context. It is not yet a field-validated crop suitability or yield prediction system."*
 
-### Critical Architectural Boundary & Anti-Fabrication Rule
-> **"The current benchmark agricultural dataset lacks the geospatial and temporal keys required to legitimately join live weather, satellite, and soil observations. Therefore, Phase 7 creates the multi-source feature contract and alignment infrastructure without fabricating historical environmental observations."**
-
-- **Zero Synthetic Alignment**: Historical rows are never assigned arbitrary coordinates, today's weather, or SoilGrids predictions.
-- **Strict Leakage Prevention**: Ground-truth target labels (`crop_label`) are strictly isolated from ML prediction feature vectors.
-- **Scientifically Defensible Derived Ratios**: Nutrient ratios ($N/P$, $N/K$, $P/K$) are protected against division-by-zero, returning `None` instead of synthetic zeros or averages.
-- **Model Preservation**: The existing Phase 3 Random Forest model artifact, metrics, and report remain 100% immutable and un-retrained.
+### Key Accomplishments in Phase 8
+1. **Model Compatibility Boundary**:
+   - Explicitly identified the 11 feature columns consumed by the trained Random Forest model (`N`, `P`, `K`, `temperature`, `humidity`, `ph`, `rainfall`, `N_P_ratio`, `N_K_ratio`, `P_K_ratio`, `rain_temp_ratio`).
+   - Built `CropModelAdapter` to isolate the 11 model features from the 27 Phase 7 multi-source feature vector without silent dropping or reordering.
+2. **Probability Estimate Terminology**:
+   - Output uses `probability_estimate` and `confidence_percentage`. Prohibits misleading claims like "suitability percentage", "harvest success probability", or "yield probability".
+3. **Data-Grounded Explanations & Limitations**:
+   - Transparent explanations cite exact observed values (temperature, rainfall, NDVI, soil pH).
+   - Prohibits claiming satellite NDVI/NDWI/NDMI directly proves crop suitability.
+   - Highlights data provenance, missing sources, and benchmark trial limitations.
+4. **Resilient Production API**:
+   - `POST /api/recommendations` endpoint with full OpenAPI documentation, input validation, clean 400/422/503 error handling, and zero fabricated fallbacks.
+5. **Comprehensive Verification**:
+   - 171 total automated tests passing (`test_recommendation.py`, `test_feature_engineering.py`, `test_weather.py`, `test_satellite.py`, `test_soil.py`, `test_model.py`, `test_data_pipeline.py`).
 
