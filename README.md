@@ -4,7 +4,7 @@
 
 ---
 
-> **Current Development Status:** **Phase 8 — Crop Suitability & Recommendation Engine**
+> **Current Development Status:** **Phase 9 — Evidence-Based Farm Advisory Engine**
 
 ---
 
@@ -39,34 +39,34 @@ AgriSense AI synthesizes multi-source environmental and geospatial data into str
 
 The platform architecture is designed across several core functional modules:
 
-- **1. Farmer Input Module**  
+- **1. Farmer Input Module**
   Captures farmer-specific farm context including geographic location (GPS / boundary / district), farm area, planned growing season, irrigation type/availability, and optional N-P-K / pH soil test parameters.
 
-- **2. Weather Data Service**  
+- **2. Weather Data Service**
   Integrates historical, current, and forecasted meteorological data (rainfall patterns, temperature profiles, solar radiation, humidity, and evapotranspiration rates).
 
-- **3. Satellite Observation Engine**  
+- **3. Satellite Observation Engine**
   Retrieves and processes remote-sensing indices (such as NDVI for vegetation vigour, NDWI for water/moisture stress, and surface reflectance) to understand historical field performance and land conditions.
 
-- **4. Soil Data Service**  
+- **4. Soil Data Service**
   Blends local farmer-provided soil data with regional digital soil maps and global soil databases (texture, organic carbon content, drainage, pH).
 
-- **5. Historical Agricultural Data Layer**  
+- **5. Historical Agricultural Data Layer**
   Correlates regional agro-climatic zones, historical crop yield statistics, and seasonal crop calendars.
 
-- **6. Multi-Source Feature Engineering Engine (Phase 7)**  
+- **6. Multi-Source Feature Engineering Engine (Phase 7)**
   Normalizes, aligns (spatially & temporally), validates, and constructs deterministic feature vectors across agricultural, meteorological, satellite, and soil sources without data leakage or fabrication.
 
-- **7. Machine Learning Engine**  
+- **7. Machine Learning Engine**
   Trained on multi-dimensional agro-climatic datasets to predict crop suitability classifications, yield potential tiers, and viability scores.
 
-- **8. Crop Recommendation & Advisory System (Phase 8)**  
+- **8. Crop Recommendation Engine (Phase 8)**
   Orchestrates the benchmark ML model with live/cached weather, Sentinel-2 satellite, and SoilGrids data to provide top-K ranked recommendations, model probability estimates, provenance, and data-grounded explanations.
 
-- **9. Environmental Risk Analysis**  
-  Evaluates environmental vulnerability—such as late-season heat stress, flood vulnerability, or prolonged dry spells—and provides mitigation advisories.
+- **9. Evidence-Based Farm Advisory Engine (Phase 9)**
+  Converts ML recommendations and multi-source observations into authoritative, transparent agricultural advisory intelligence grounded in FAO ECOCROP ecological requirements and FAO-56 crop-water methodology. Implements deterministic compatibility checks (favorable, caution, unfavorable, unavailable), risk flag audits, and growth cycle tracking without arbitrary formulas or suitability inflation.
 
-- **10. Farmer Dashboard (Frontend)**  
+- **10. Farmer Dashboard (Frontend)**
   A clean, intuitive, and responsive web interface designed to present complex geospatial insights through clear visual cards, charts, maps, and straightforward advisory summaries.
 
 ---
@@ -138,7 +138,7 @@ AgriSense-AI/
 
 ## 🚀 Current Milestone: Phase 8 — Crop Suitability & Recommendation Engine
 
-> **Mandatory Scientific Notice:**  
+> **Mandatory Scientific Notice:**
 > *"The current recommendation engine is a benchmark-model recommendation layer augmented with environmental context. It is not yet a field-validated crop suitability or yield prediction system."*
 
 ### Key Accomplishments in Phase 8

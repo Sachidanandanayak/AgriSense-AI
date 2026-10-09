@@ -3,6 +3,7 @@ from app.api.routes.weather import router as weather_router
 from app.api.routes.satellite import router as satellite_router
 from app.api.routes.soil import router as soil_router
 from app.api.routes.recommendations import router as recommendations_router
+from app.api.routes.advisory import router as advisory_router
 from app.core.config import settings
 
 app = FastAPI(
@@ -16,6 +17,7 @@ app.include_router(weather_router, prefix=settings.API_PREFIX, tags=["Weather"])
 app.include_router(satellite_router, prefix=settings.API_PREFIX, tags=["Satellite"])
 app.include_router(soil_router, prefix=settings.API_PREFIX, tags=["Soil"])
 app.include_router(recommendations_router, prefix=settings.API_PREFIX, tags=["Recommendation"])
+app.include_router(advisory_router, prefix=settings.API_PREFIX, tags=["Farm Advisory"])
 
 
 @app.get("/")

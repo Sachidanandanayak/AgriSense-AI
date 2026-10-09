@@ -4,5 +4,12 @@ from app.api.routes.weather import router as weather_router
 from app.api.routes.satellite import router as satellite_router
 from app.api.routes.soil import router as soil_router
 from app.api.routes.recommendations import router as recommendations_router
+from app.api.routes.advisory import router as advisory_router
 
-__all__ = ["weather_router", "satellite_router", "soil_router", "recommendations_router"]
+__all__ = [
+    "weather_router",
+    "satellite_router",
+    "soil_router",
+    "recommendations_router",
+    "advisory_router",
+]

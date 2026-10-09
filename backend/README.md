@@ -4,7 +4,7 @@ The backend of **AgriSense AI** provides the core RESTful API services that powe
 
 ---
 
-> **Current Milestone:** **Phase 8 — Crop Suitability & Recommendation Engine**
+> **Current Milestone:** **Phase 9 — Evidence-Based Farm Advisory Engine**
 
 ---
 
@@ -20,6 +20,7 @@ The backend of **AgriSense AI** provides the core RESTful API services that powe
 | `GET` | `/api/satellite` | Sentinel-2 Vegetation & Moisture Indices | `?latitude=16.20&longitude=77.35&start_date=2026-09-01&end_date=2026-09-25` |
 | `GET` | `/api/soil` | Normalized Soil Properties & Texture | `?latitude=20.59&longitude=78.96&depth=0-5cm` |
 | `POST` | `/api/recommendations` | Ranked Crop Recommendations with Context | JSON body with coordinates, agricultural inputs, optional context |
+| `POST` | `/api/advisory` | Evidence-Based Farm Advisory with FAO Ecological Compatibility | JSON body with coordinates, agricultural inputs, optional context or recommendation |
 
 ---
 
@@ -963,10 +964,203 @@ python -m unittest backend/tests/test_recommendation.py
 # Ran 35 tests in 1.69s - OK
 ```
 
-Full backend test suite execution (171 tests):
+Full backend test suite execution (Phase 8 baseline):
 ```powershell
 python -m unittest discover -s backend/tests -p "test_*.py"
 # Ran 171 tests in 1.77s - OK (skipped=2)
+```
+
+---
+
+## 🌾 Phase 9: Evidence-Based Farm Advisory Engine
+
+### 1. Purpose & Core Philosophy
+Phase 9 constructs an evidence-based, transparent Farm Advisory Engine that augments Phase 8 benchmark machine learning recommendations with authoritative agronomic evidence.
+
+**Core Scientific Rules Enforced**:
+1. **Zero Fabrication**: No agronomic thresholds, crop coefficients, or evapotranspiration rates are guessed or fabricated. Every threshold is grounded in authoritative sources or left explicitly `unavailable`.
+2. **No Arbitrary Scoring / Formulas**: The system strictly avoids invented suitability formulas (such as `Suitability = 30% NDVI + 30% soil + 40% weather`).
+3. **Law of the Minimum**: Overall compatibility follows the Sprengel-Liebig Law of the Minimum (Hackett, 1991), where the most limiting biophysical factor dictates overall viability.
+4. **Preserved ML Probabilities**: Benchmark Random Forest probability estimates are preserved exactly without converting them into deceptive "suitability percentages" or "yield guarantees".
+5. **Mandatory Scientific Language**: Terminology is strictly constrained to scientifically defensible terms (`compatibility`, `documented environmental range`, `benchmark-model confidence estimate`, `environmental evidence`, `advisory`, `risk indicator`, `source-backed requirement`). Marketing terms such as "harvest success probability", "guaranteed yield", or "scientifically validated suitability" are strictly forbidden.
+
+---
+
+### 2. Architecture & Advisory Pipeline
+
+```text
+Farmer Coordinates & Agricultural Inputs
+                      ↓
+Phase 8 ML Recommendation Engine (Preserved Top-K & Probability Estimates)
+                      ↓
+Phase 4 Weather + Phase 5 Satellite + Phase 6 Soil Context
+                      ↓
+PHASE 9 EVIDENCE-BASED FARM ADVISORY ENGINE
+  ├── 1. Crop Requirement Profile Registry (Authoritative FAO ECOCROP Database)
+  ├── 2. Compatibility Engine (Favorable / Caution / Unfavorable / Unavailable)
+  ├── 3. Water Advisory Engine (FAO-56 Penman-Monteith / FAO CROPWAT Methodology)
+  ├── 4. Satellite Context Synthesis (NDVI / NDWI / NDMI Context Indicators)
+  ├── 5. Deterministic Risk Flag Aggregator
+  └── 6. Transparent Explanations & Scientific Limitations Generator
+                      ↓
+FastAPI Endpoint: POST /api/advisory
+```
+
+---
+
+### 3. Authoritative Scientific Sources & Provenance
+
+Every crop requirement profile in the registry (`backend/app/services/farm_advisory/requirements.py`) contains verified provenance tracing back to:
+- **Primary Database**: [FAO ECOCROP — Crop Ecological Requirements Database](https://ecocrop.apps.fao.org/ecocrop/srv/en/home) & FAO GAEZ (Global Agro-Ecological Zoning) v4 biophysical descriptors.
+- **Parameters Verified**:
+  - `TMIN`, `TOPMN`, `TOPMX`, `TMAX`: Absolute and optimal temperature thresholds (°C).
+  - `RMIN`, `ROPMN`, `ROPMX`, `RMAX`: Absolute and optimal rainfall thresholds (mm).
+  - `PHMIN`, `PHOPMN`, `PHOPMX`, `PHMAX`: Absolute and optimal soil pH thresholds.
+  - `TEXT`, `TEXTR`: Optimal and absolute soil texture classes (heavy, medium, light, organic).
+  - `DRA`, `DRAR`: Optimal and absolute soil drainage requirements.
+  - `DEP`, `DEPR`: Optimal and absolute soil depth requirements.
+  - `FER`, `SAL`: Soil fertility requirements and salinity tolerance boundaries.
+  - `GMIN`, `GMAX`: Minimum and maximum crop growth cycle duration in days.
+- **Water Methodology**: FAO Irrigation and Drainage Paper No. 56 (*Crop Evapotranspiration: Guidelines for computing crop water requirements*, Allen et al., 1998) and FAO CROPWAT.
+
+---
+
+### 4. Compatibility Engine Logic
+
+Each environmental dimension is evaluated independently against documented FAO ECOCROP requirements:
+- **`favorable`**: Observed environmental value falls entirely within the documented optimal range $[V_{opt\_min}, V_{opt\_max}]$.
+- **`caution`**: Observed value is outside the optimal range, but remains within viable absolute boundaries $[V_{abs\_min}, V_{abs\_max}]$.
+- **`unfavorable`**: Observed value falls strictly outside absolute viable boundaries ($< V_{abs\_min}$ or $> V_{abs\_max}$).
+- **`unavailable`**: Observed metric or documented requirement is missing.
+
+**Overall Compatibility**:
+- `unfavorable` if **any** evaluated variable is unfavorable.
+- `caution` if **any** evaluated variable is caution (and none unfavorable).
+- `favorable` if at least one variable is favorable and none are caution/unfavorable.
+- `unavailable` if all variables are unavailable.
+
+---
+
+### 5. Water Advisory Methodology & Missing-Data Policy
+
+- **Calculation Constraint**: In accordance with FAO-56 Penman-Monteith methodology, reference evapotranspiration ($ET_0$) requires net solar radiation ($R_n$), daily temperature extrema ($T_{max}, T_{min}$), standardized 2m wind speed ($u_2$), and saturation vapor pressure deficit. Stage-specific crop water demand ($ET_c$) requires growth stage-specific coefficients ($K_c$).
+- **Zero Fabrication**: Instantaneous weather readings (such as a single temperature or current rain gauge reading) cannot be substituted for seasonal crop water requirements. When required radiation or $K_c$ parameters are missing, the water advisory status is returned as `unavailable` with an explicit list of missing parameters:
+  `["net_solar_radiation (Rn)", "crop_growth_stage_coefficient (Kc)", "daily_temperature_extrema (Tmax, Tmin)", "effective_precipitation_depth (Peff)"]`.
+- **Defensible Computation**: If complete validated FAO-56 parameters are supplied, the exact FAO-56 Penman-Monteith formula computes $ET_0$, $ET_c = K_c \times ET_0$, and net irrigation requirement $IWR = \max(0, ET_c - P_{eff})$.
+
+---
+
+### 6. API Endpoint Specification
+
+#### `POST /api/advisory`
+Generates comprehensive farm advisory and FAO ecological compatibility reporting.
+
+**Request Schema (`FarmAdvisoryRequest`)**:
+```json
+{
+  "latitude": 16.20,
+  "longitude": 77.35,
+  "observation_date": "2026-09-25",
+  "agricultural_inputs": {
+    "nitrogen": 80.0,
+    "phosphorus": 40.0,
+    "potassium": 40.0,
+    "temperature": 26.5,
+    "humidity": 65.0,
+    "ph": 6.8,
+    "rainfall": 120.0
+  },
+  "top_k": 3,
+  "fetch_live_weather": false,
+  "fetch_live_satellite": false,
+  "fetch_live_soil": false
+}
+```
+*(Alternatively, an existing Phase 8 `recommendation_response` can be supplied in the body to attach advisory evidence without re-running ML inference).*
+
+**Response Schema (`FarmAdvisoryResponse` - Illustrative)**:
+```json
+{
+  "latitude": 16.2,
+  "longitude": 77.35,
+  "observation_date": "2026-09-25",
+  "crop_advisories": [
+    {
+      "crop": "rice",
+      "scientific_name": "Oryza sativa",
+      "rank": 1,
+      "probability_estimate": 0.88,
+      "confidence_percentage": "88.00%",
+      "overall_compatibility": "favorable",
+      "compatibility_evaluations": {
+        "temperature": {
+          "variable": "Temperature",
+          "status": "favorable",
+          "observed_value": 26.5,
+          "observed_unit": "°C",
+          "documented_optimal_range": "20.0 to 30.0 °C",
+          "documented_absolute_range": "10.0 to 36.0 °C",
+          "reason": "Observed temperature (26.5 °C) falls within documented optimal range [20.0 to 30.0 °C].",
+          "source": "FAO ECOCROP"
+        },
+        "soil_ph": {
+          "variable": "Soil pH",
+          "status": "favorable",
+          "observed_value": 6.8,
+          "observed_unit": "pH",
+          "documented_optimal_range": "5.5 to 7.0 pH",
+          "documented_absolute_range": "4.5 to 9.0 pH",
+          "reason": "Observed soil ph (6.8 pH) falls within documented optimal range [5.5 to 7.0 pH].",
+          "source": "FAO ECOCROP"
+        }
+      },
+      "growth_cycle_days": "80 to 180 days (FAO ECOCROP)",
+      "risk_flags": [],
+      "advisory_notes": [],
+      "requirement_provenance": {
+        "source_name": "FAO ECOCROP - Crop Ecological Requirements Database",
+        "source_url": "https://ecocrop.apps.fao.org/ecocrop/srv/en/home",
+        "source_field": "TOPMN, TOPMX, TMIN, TMAX, ROPMN, ROPMX, RMIN, RMAX, PHOPMN, PHOPMX, PHMIN, PHMAX, TEXT, TEXTR, DRA, DEP, FER, SAL, GMIN, GMAX",
+        "source_version_or_reference": "FAO EcoCrop Database / FAO GAEZ (Global Agro-Ecological Zoning) v4 biophysical descriptors",
+        "notes": "Ecological parameters define macro-scale biophysical tolerance boundaries."
+      }
+    }
+  ],
+  "water_advisory": {
+    "status": "unavailable",
+    "methodology": "FAO-56 Penman-Monteith / FAO CROPWAT Methodology",
+    "reason": "Insufficient meteorological and agronomic parameters for defensible FAO-56 reference evapotranspiration (ET0) and stage-specific crop water demand (ETc) calculation.",
+    "missing_parameters": [
+      "net_solar_radiation (Rn)",
+      "crop_growth_stage_coefficient (Kc)",
+      "daily_temperature_extrema (Tmax, Tmin)",
+      "effective_precipitation_depth (Peff)"
+    ]
+  },
+  "risk_flags": [
+    "satellite_data_missing",
+    "soil_data_missing",
+    "soil_texture_information_missing",
+    "weather_data_missing"
+  ],
+  "disclaimer": "This farm advisory report synthesizes benchmark machine learning recommendations with authoritative FAO ECOCROP ecological requirements and observed environmental context..."
+}
+```
+
+---
+
+### 7. Automated Testing Suite
+
+The Phase 9 test suite (`backend/tests/test_farm_advisory.py`) verifies all 29 requirements, compatibility states, water advisory behaviors, and scientific terminology rules:
+```powershell
+python -m unittest backend/tests/test_farm_advisory.py
+# Ran 29 tests in 2.12s - OK
+```
+
+Full repository test suite execution (200 tests):
+```powershell
+pytest -q
+# 198 passed, 2 skipped in 36.32s
 ```
 
 

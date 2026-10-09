@@ -24,6 +24,20 @@ from app.schemas.recommendation import (
     RecommendationRequest,
     RecommendationResponse,
 )
+from app.schemas.advisory import (
+    ADVISORY_DISCLAIMER,
+    CompatibilityStatus,
+    CropAdvisoryItem,
+    CropEnvironmentalRequirement,
+    DataQualityAudit,
+    FarmAdvisoryRequest,
+    FarmAdvisoryResponse,
+    RequirementProvenance,
+    SatelliteEnvironmentalContext,
+    VariableCompatibility,
+    WaterAdvisory,
+    WaterAdvisoryStatus,
+)
 
 __all__ = [
     "WeatherResponse",
@@ -47,5 +61,17 @@ __all__ = [
     "MANDATORY_DISCLAIMER",
     "RecommendationRequest",
     "RecommendationResponse",
+    "ADVISORY_DISCLAIMER",
+    "CompatibilityStatus",
+    "CropAdvisoryItem",
+    "CropEnvironmentalRequirement",
+    "DataQualityAudit",
+    "FarmAdvisoryRequest",
+    "FarmAdvisoryResponse",
+    "RequirementProvenance",
+    "SatelliteEnvironmentalContext",
+    "VariableCompatibility",
+    "WaterAdvisory",
+    "WaterAdvisoryStatus",
 ]
 
