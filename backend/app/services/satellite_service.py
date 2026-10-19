@@ -563,6 +563,9 @@ class SatelliteService:
             statistics=stats_dict,
         )
 
+    # Backward compatibility alias for crop recommendation service and downstream callers
+    get_satellite_indices = get_satellite_data
+
 
 # Singleton instance for route injection
 satellite_service = SatelliteService()

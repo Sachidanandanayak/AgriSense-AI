@@ -868,6 +868,89 @@ class TestRecommendationApiEndpoint(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(in_df.shape, (1, 11))
         self.assertEqual(in_df.columns.tolist(), EXPECTED_MODEL_FEATURES)
 
+    def test_36_satellite_service_exposes_get_satellite_indices_alias(self):
+        """36. Verify SatelliteService provides get_satellite_indices as an alias to get_satellite_data."""
+        from app.services.satellite_service import satellite_service, SatelliteService
+
+        self.assertTrue(hasattr(satellite_service, "get_satellite_indices"))
+        self.assertTrue(hasattr(satellite_service, "get_satellite_data"))
+        self.assertEqual(SatelliteService.get_satellite_indices, SatelliteService.get_satellite_data)
+
+    async def test_37_recommendation_with_live_satellite_unmocked_degrades_gracefully(self):
+        """37. Verify recommendation service handles fetch_live_satellite against real satellite service without AttributeError."""
+        from app.services.satellite_service import satellite_service
+
+        agri = AgriculturalInput(
+            nitrogen=90.0,
+            phosphorus=42.0,
+            potassium=43.0,
+            temperature=20.87,
+            humidity=82.0,
+            ph=6.5,
+            rainfall=202.93,
+        )
+        service = RecommendationService(satellite_svc=satellite_service)
+        request = RecommendationRequest(
+            latitude=16.20,
+            longitude=77.35,
+            observation_date="2026-09-25",
+            agricultural_inputs=agri,
+            top_k=3,
+            fetch_live_satellite=True,
+            fetch_live_weather=False,
+            fetch_live_soil=False,
+        )
+        response = await service.generate_recommendation(request)
+        self.assertIsInstance(response, RecommendationResponse)
+        self.assertEqual(len(response.recommendations), 3)
+        self.assertTrue(any("satellite" in w.lower() for w in response.data_quality.warnings))
+
+    async def test_38_api_recommendation_with_live_context_defaults_succeeds_200(self):
+        """38. Regression test: POST /api/recommendations succeeds with 200 when live fetch flags are True and contexts are None."""
+        mock_weather = WeatherResponse(
+            latitude=16.2056,
+            longitude=77.3556,
+            temperature_c=26.5,
+            humidity_percent=65.0,
+            rainfall_mm=0.0,
+            wind_speed_mps=3.2,
+            weather_timestamp="2026-10-10T10:00",
+        )
+        payload = {
+            "latitude": 16.2056,
+            "longitude": 77.3556,
+            "observation_date": "2026-10-10",
+            "agricultural_inputs": {
+                "nitrogen": 80.0,
+                "phosphorus": 40.0,
+                "potassium": 40.0,
+                "temperature": 26.5,
+                "humidity": 65.0,
+                "ph": 6.8,
+                "rainfall": 120.0,
+            },
+            "top_k": 3,
+            "weather_context": None,
+            "soil_context": None,
+            "satellite_context": None,
+            "fetch_live_weather": True,
+            "fetch_live_soil": True,
+            "fetch_live_satellite": True,
+        }
+        with patch.object(
+            recommendation_service.weather_service,
+            "get_current_weather",
+            new_callable=AsyncMock,
+            return_value=mock_weather,
+        ):
+            res = await self.client.post("/api/recommendations", json=payload)
+            self.assertEqual(res.status_code, 200)
+            data = res.json()
+            self.assertEqual(len(data["recommendations"]), 3)
+            self.assertIn("probability_estimate", data["recommendations"][0])
+            self.assertEqual(data["disclaimer"], MANDATORY_DISCLAIMER)
+            self.assertIn("model_input_features", data)
+
 
 if __name__ == "__main__":
     unittest.main()
