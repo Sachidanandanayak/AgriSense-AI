@@ -39,6 +39,15 @@ from app.schemas.advisory import (
     WaterAdvisoryStatus,
 )
 
+from app.schemas.regional import (
+    SoilType,
+    IrrigationStatus,
+    CropSeason,
+    RegionalSuitabilityTier,
+    RegionalCropCandidate,
+    RegionalAdvisoryReport,
+)
+
 __all__ = [
     "WeatherResponse",
     "SatelliteResponse",
@@ -73,5 +82,11 @@ __all__ = [
     "VariableCompatibility",
     "WaterAdvisory",
     "WaterAdvisoryStatus",
+    "SoilType",
+    "IrrigationStatus",
+    "CropSeason",
+    "RegionalSuitabilityTier",
+    "RegionalCropCandidate",
+    "RegionalAdvisoryReport",
 ]
 

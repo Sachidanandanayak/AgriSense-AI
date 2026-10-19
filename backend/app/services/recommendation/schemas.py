@@ -8,6 +8,12 @@ from pydantic import BaseModel, Field, ConfigDict, model_validator
 from app.schemas.weather import WeatherResponse
 from app.schemas.satellite import SatelliteResponse
 from app.schemas.soil import SoilResponse
+from app.schemas.regional import (
+    SoilType,
+    IrrigationStatus,
+    CropSeason,
+    RegionalAdvisoryReport,
+)
 
 MANDATORY_DISCLAIMER: str = (
     "The current recommendation engine is a benchmark-model recommendation layer "
@@ -139,6 +145,20 @@ class RecommendationRequest(BaseModel):
     fetch_live_soil: bool = Field(
         default=False,
         description="If True and soil_context is None, attempt live SoilGrids query",
+    )
+
+    # Optional farmer field confirmations for regional candidate evaluation
+    soil_type: SoilType | None = Field(
+        default=None,
+        description="Optional farmer-confirmed field soil classification (e.g. deep_black, medium_black, red_sandy_loam, loam)",
+    )
+    irrigation_status: IrrigationStatus | None = Field(
+        default=None,
+        description="Optional farmer-confirmed irrigation water access (e.g. rainfed, canal_irrigated, borewell_irrigated)",
+    )
+    season: CropSeason | None = Field(
+        default=None,
+        description="Optional farmer-confirmed cropping season (e.g. kharif, rabi, summer)",
     )
 
     @model_validator(mode="before")
@@ -281,6 +301,10 @@ class RecommendationResponse(BaseModel):
     recommendations: list[CropRecommendationItem] = Field(
         ...,
         description="Ranked list of crop recommendations ordered by benchmark model probability estimate",
+    )
+    regional_advisory: RegionalAdvisoryReport | None = Field(
+        default=None,
+        description="Locally relevant crop candidates report grounded in UAS Raichur & ICAR Zone 2 evidence",
     )
     environmental_context: EnvironmentalContext = Field(
         default_factory=EnvironmentalContext,

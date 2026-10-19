@@ -40,6 +40,11 @@ from app.services.recommendation.schemas import (
     RecommendationRequest,
     RecommendationResponse,
 )
+from app.services.regional_kb import (
+    RegionalAdvisoryReport,
+    evaluate_regional_candidates,
+    is_raichur_yadgir_region,
+)
 from app.services.recommendation.validators import (
     validate_agricultural_inputs,
     validate_coordinates,
@@ -152,7 +157,12 @@ class RecommendationService:
                 )
                 start_d = (ref_date - timedelta(days=settings.FEATURE_SATELLITE_MAX_WINDOW_DAYS)).isoformat()
                 end_d = ref_date.isoformat()
-                satellite = await self.satellite_service.get_satellite_indices(
+                fetch_satellite = (
+                    self.satellite_service.get_satellite_indices
+                    if hasattr(self.satellite_service, "get_satellite_indices")
+                    else self.satellite_service.get_satellite_data
+                )
+                satellite = await fetch_satellite(
                     latitude=lat,
                     longitude=lon,
                     start_date=start_d,
@@ -245,12 +255,28 @@ class RecommendationService:
             soil_available=soil_avail,
         )
 
-        # 10. Assemble Final Structured Response
+        # 10. Regional Agronomic Evaluation for Raichur & Yadgir (Karnataka Zone 2 / Zone 1)
+        regional_report: RegionalAdvisoryReport | None = None
+        if is_raichur_yadgir_region(lat, lon) or any(
+            x is not None for x in (request.soil_type, request.irrigation_status, request.season)
+        ):
+            regional_report = evaluate_regional_candidates(
+                latitude=lat,
+                longitude=lon,
+                soil_type=request.soil_type,
+                irrigation=request.irrigation_status,
+                season=request.season,
+                temperature_c=agri_inputs.temperature if agri_inputs else None,
+                soil_ph=agri_inputs.ph if agri_inputs else None,
+            )
+
+        # 11. Assemble Final Structured Response
         return RecommendationResponse(
             latitude=lat,
             longitude=lon,
             observation_date=obs_date,
             recommendations=recommendations,
+            regional_advisory=regional_report,
             environmental_context=EnvironmentalContext(
                 weather=weather,
                 satellite=satellite,

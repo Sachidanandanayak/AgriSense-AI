@@ -15,6 +15,14 @@ from app.services.recommendation.schemas import (
     RecommendationRequest,
     RecommendationResponse,
 )
+from app.schemas.regional import (
+    CropSeason,
+    IrrigationStatus,
+    RegionalAdvisoryReport,
+    RegionalCropCandidate,
+    RegionalSuitabilityTier,
+    SoilType,
+)
 
 ADVISORY_DISCLAIMER: str = (
     "This farm advisory report synthesizes benchmark machine learning recommendations "
@@ -282,6 +290,24 @@ class FarmAdvisoryRequest(BaseModel):
         description="Optional detailed meteorological and agronomic parameters for FAO-56 ET0 and crop water calculation",
     )
 
+    # Optional farmer field confirmations for regional candidate evaluation
+    soil_type: SoilType | None = Field(
+        default=None,
+        description="Optional farmer-confirmed field soil classification (e.g. deep_black, medium_black, red_sandy_loam, loam)",
+    )
+    irrigation_status: IrrigationStatus | None = Field(
+        default=None,
+        description="Optional farmer-confirmed irrigation water access (e.g. rainfed, canal_irrigated, borewell_irrigated)",
+    )
+    season: CropSeason | None = Field(
+        default=None,
+        description="Optional farmer-confirmed cropping season (e.g. kharif, rabi, summer)",
+    )
+    rainfall_is_annual: bool | None = Field(
+        default=None,
+        description="Optional explicit indicator whether supplied rainfall represents 12-month annual total",
+    )
+
     @model_validator(mode="before")
     @classmethod
     def resolve_agricultural_inputs(cls, data: Any) -> Any:
@@ -338,6 +364,10 @@ class FarmAdvisoryResponse(BaseModel):
     crop_advisories: list[CropAdvisoryItem] = Field(
         ...,
         description="Ranked candidate crops with benchmark ML confidence estimates, source-backed compatibility evaluations, risk flags, and advisory notes",
+    )
+    regional_advisory: RegionalAdvisoryReport | None = Field(
+        default=None,
+        description="Locally relevant crop candidates report grounded in UAS Raichur & ICAR Zone 2 evidence",
     )
     water_advisory: WaterAdvisory = Field(
         ...,

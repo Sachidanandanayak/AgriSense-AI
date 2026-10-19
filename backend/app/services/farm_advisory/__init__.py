@@ -51,6 +51,16 @@ from app.services.farm_advisory.advisory_service import (
     FarmAdvisoryService,
     farm_advisory_service,
 )
+from app.services.farm_advisory.regional_kb import (
+    CropSeason,
+    IrrigationStatus,
+    RegionalAdvisoryReport,
+    RegionalCropCandidate,
+    RegionalSuitabilityTier,
+    SoilType,
+    evaluate_regional_candidates,
+    is_raichur_yadgir_region,
+)
 
 __all__ = [
     "FarmAdvisoryError",
@@ -88,4 +98,12 @@ __all__ = [
     "validate_advisory_date",
     "FarmAdvisoryService",
     "farm_advisory_service",
+    "SoilType",
+    "IrrigationStatus",
+    "CropSeason",
+    "RegionalSuitabilityTier",
+    "RegionalCropCandidate",
+    "RegionalAdvisoryReport",
+    "evaluate_regional_candidates",
+    "is_raichur_yadgir_region",
 ]

@@ -677,6 +677,64 @@ FAO_ECOCROP_PROFILES: dict[str, CropEnvironmentalRequirement] = {
         crop_cycle_max_days=330,
         provenance=DEFAULT_ECOCROP_PROVENANCE,
     ),
+    "sorghum": CropEnvironmentalRequirement(
+        crop_name="sorghum",
+        scientific_name="Sorghum bicolor",
+        ecocrop_code=1999,
+        common_name="sorghum / jowar",
+        temp_min_c=8.0,
+        temp_opt_min_c=24.0,
+        temp_opt_max_c=34.0,
+        temp_max_c=40.0,
+        rainfall_min_mm=300.0,
+        rainfall_opt_min_mm=450.0,
+        rainfall_opt_max_mm=800.0,
+        rainfall_max_mm=1500.0,
+        soil_ph_min=5.0,
+        soil_ph_opt_min=5.5,
+        soil_ph_opt_max=7.5,
+        soil_ph_max=8.5,
+        soil_textures_optimal=["medium", "heavy"],
+        soil_textures_absolute=["medium", "heavy", "light"],
+        soil_drainage_optimal="well (dry spells)",
+        soil_drainage_absolute="well (dry spells)",
+        soil_depth_optimal="medium (50-150 cm)",
+        soil_depth_absolute="medium (50-150 cm)",
+        soil_fertility_optimal="moderate",
+        soil_salinity_optimal="moderate (4-8 dS/m)",
+        crop_cycle_min_days=90,
+        crop_cycle_max_days=140,
+        provenance=DEFAULT_ECOCROP_PROVENANCE,
+    ),
+    "groundnut": CropEnvironmentalRequirement(
+        crop_name="groundnut",
+        scientific_name="Arachis hypogaea",
+        ecocrop_code=347,
+        common_name="groundnut / peanut",
+        temp_min_c=15.0,
+        temp_opt_min_c=22.0,
+        temp_opt_max_c=30.0,
+        temp_max_c=36.0,
+        rainfall_min_mm=400.0,
+        rainfall_opt_min_mm=500.0,
+        rainfall_opt_max_mm=1000.0,
+        rainfall_max_mm=1500.0,
+        soil_ph_min=5.0,
+        soil_ph_opt_min=5.5,
+        soil_ph_opt_max=7.0,
+        soil_ph_max=8.0,
+        soil_textures_optimal=["light", "medium"],
+        soil_textures_absolute=["light", "medium"],
+        soil_drainage_optimal="well (dry spells)",
+        soil_drainage_absolute="well (dry spells)",
+        soil_depth_optimal="medium (50-150 cm)",
+        soil_depth_absolute="shallow (20-50 cm)",
+        soil_fertility_optimal="moderate",
+        soil_salinity_optimal="low (<4 dS/m)",
+        crop_cycle_min_days=90,
+        crop_cycle_max_days=140,
+        provenance=DEFAULT_ECOCROP_PROVENANCE,
+    ),
 }
 
 
@@ -690,8 +748,19 @@ class CropRequirementRepository:
         )
 
     def get_requirement(self, crop_name: str) -> CropEnvironmentalRequirement | None:
-        """Retrieve requirement profile for a crop name (case-insensitive)."""
-        return self._profiles.get(crop_name.strip().lower())
+        """Retrieve requirement profile for a crop name (case-insensitive, supporting common aliases)."""
+        key = crop_name.strip().lower()
+        if key in ("jowar", "jola"):
+            key = "sorghum"
+        elif key in ("peanut",):
+            key = "groundnut"
+        elif key in ("tur", "redgram", "red_gram", "arhar", "togari"):
+            key = "pigeonpeas"
+        elif key in ("bengal_gram", "bengalgram", "chana", "kadale"):
+            key = "chickpea"
+        elif key in ("paddy", "bhatta"):
+            key = "rice"
+        return self._profiles.get(key)
 
     def list_supported_crops(self) -> list[str]:
         """Return list of all supported crop identifiers."""

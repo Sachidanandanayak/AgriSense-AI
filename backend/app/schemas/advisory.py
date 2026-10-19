@@ -13,6 +13,12 @@ from app.services.farm_advisory.schemas import (
     VariableCompatibility,
     WaterAdvisory,
     WaterAdvisoryStatus,
+    SoilType,
+    IrrigationStatus,
+    CropSeason,
+    RegionalSuitabilityTier,
+    RegionalCropCandidate,
+    RegionalAdvisoryReport,
 )
 
 __all__ = [
@@ -28,4 +34,10 @@ __all__ = [
     "VariableCompatibility",
     "WaterAdvisory",
     "WaterAdvisoryStatus",
+    "SoilType",
+    "IrrigationStatus",
+    "CropSeason",
+    "RegionalSuitabilityTier",
+    "RegionalCropCandidate",
+    "RegionalAdvisoryReport",
 ]

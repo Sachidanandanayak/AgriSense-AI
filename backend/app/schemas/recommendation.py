@@ -8,6 +8,10 @@ from app.services.recommendation.schemas import (
     MANDATORY_DISCLAIMER,
     RecommendationRequest,
     RecommendationResponse,
+    SoilType,
+    IrrigationStatus,
+    CropSeason,
+    RegionalAdvisoryReport,
 )
 
 __all__ = [
@@ -18,4 +22,8 @@ __all__ = [
     "MANDATORY_DISCLAIMER",
     "RecommendationRequest",
     "RecommendationResponse",
+    "SoilType",
+    "IrrigationStatus",
+    "CropSeason",
+    "RegionalAdvisoryReport",
 ]

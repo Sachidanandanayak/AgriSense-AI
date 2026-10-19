@@ -593,7 +593,57 @@ class TestSoilApiEndpoints(unittest.IsolatedAsyncioTestCase):
 
 
 # ===========================================================================
-# 6. Optional Live SoilGrids Integration Test
+# 6. Agricultural Presets & Coordinate Verification Tests
+# ===========================================================================
+
+
+class TestAgriculturalPresetCoordinates(unittest.TestCase):
+    """Unit tests validating the accuracy, geographic bounds, and regional alignment
+    of verified agricultural research station preset coordinates.
+    """
+
+    def test_preset_coordinates_validity(self):
+        """Verify all agricultural preset research station coordinates pass boundary checks."""
+        presets = [
+            ("Raichur MARS UAS", 16.2160, 77.3300),
+            ("Ludhiana PAU Farm", 30.9020, 75.7950),
+            ("Nashik Niphad Station", 20.0800, 74.0500),
+            ("Guntur Lam RARS", 16.4150, 80.4420),
+        ]
+        for name, lat, lon in presets:
+            try:
+                validate_coordinates(lat, lon)
+            except InvalidCoordinatesError:
+                self.fail(f"Preset '{name}' failed coordinate validation.")
+
+    def test_raichur_preset_aligns_with_regional_kb_boundary(self):
+        """Verify Raichur research station coordinate falls within Raichur/Yadgir regional KB."""
+        from app.services.regional_kb import is_raichur_yadgir_region
+
+        self.assertTrue(
+            is_raichur_yadgir_region(16.2160, 77.3300),
+            "Raichur MARS UAS coordinate must fall within Raichur/Yadgir agronomic bounds.",
+        )
+
+    def test_unavailable_soil_data_empty_layers(self):
+        """Verify NoSoilDataError is raised when SoilGrids returns empty layers array."""
+        empty_payload = {
+            "type": "Feature",
+            "properties": {"layers": []},
+        }
+        mock_response = httpx.Response(200, json=empty_payload)
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        provider = SoilGridsProvider(client=mock_client)
+        with self.assertRaises(NoSoilDataError):
+            import asyncio
+
+            asyncio.run(provider.fetch_soil_data(16.2160, 77.3300))
+
+
+# ===========================================================================
+# 7. Optional Live SoilGrids Integration Test
 # ===========================================================================
 
 
@@ -623,6 +673,40 @@ class TestSoilGridsLiveIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(response.soil.ph)
         self.assertGreaterEqual(response.soil.ph, 0.0)
         self.assertLessEqual(response.soil.ph, 14.0)
+
+    @unittest.skipUnless(
+        os.getenv("SOILGRIDS_LIVE_TEST") == "1",
+        "Live SoilGrids test skipped unless SOILGRIDS_LIVE_TEST=1 is set.",
+    )
+    async def test_live_soilgrids_preset_raichur(self):
+        """Live test verifying verified agricultural preset (UAS Raichur MARS) returns valid data."""
+        service = SoilService()
+        response = await service.get_soil_data(
+            latitude=16.2160,
+            longitude=77.3300,
+            depth_interval="0-5cm",
+        )
+        self.assertIsInstance(response, SoilResponse)
+        self.assertEqual(response.latitude, 16.2160)
+        self.assertEqual(response.longitude, 77.3300)
+        self.assertIsNotNone(response.soil.ph)
+        self.assertIsNotNone(response.soil.clay_pct)
+        self.assertIsNotNone(response.soil.sand_pct)
+        self.assertIsNotNone(response.soil.organic_carbon_g_kg)
+
+    @unittest.skipUnless(
+        os.getenv("SOILGRIDS_LIVE_TEST") == "1",
+        "Live SoilGrids test skipped unless SOILGRIDS_LIVE_TEST=1 is set.",
+    )
+    async def test_live_soilgrids_urban_center_masked(self):
+        """Live test verifying city-centre coordinate (16.2056, 77.3556) correctly raises NoSoilDataError."""
+        service = SoilService()
+        with self.assertRaises(NoSoilDataError):
+            await service.get_soil_data(
+                latitude=16.2056,
+                longitude=77.3556,
+                depth_interval="0-5cm",
+            )
 
 
 if __name__ == "__main__":

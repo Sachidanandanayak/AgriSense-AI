@@ -38,6 +38,11 @@ from app.services.farm_advisory.schemas import (
     SatelliteEnvironmentalContext,
     WaterAdvisory,
 )
+from app.services.farm_advisory.regional_kb import (
+    RegionalAdvisoryReport,
+    evaluate_regional_candidates,
+    is_raichur_yadgir_region,
+)
 from app.services.farm_advisory.validators import (
     audit_data_freshness,
     validate_advisory_coordinates,
@@ -93,6 +98,9 @@ class FarmAdvisoryService:
                 fetch_live_weather=request.fetch_live_weather,
                 fetch_live_satellite=request.fetch_live_satellite,
                 fetch_live_soil=request.fetch_live_soil,
+                soil_type=request.soil_type,
+                irrigation_status=request.irrigation_status,
+                season=request.season,
             )
             rec_response = await self.recommendation_service.generate_recommendation(rec_request)
 
@@ -115,18 +123,19 @@ class FarmAdvisoryService:
             all_risk_flags.add("soil_data_missing")
 
         # 5. Extract observed environmental values for compatibility evaluation
-        # Temperature: preference for live weather, then agricultural input
+        # Temperature: preference for seasonal ambient agricultural input (growing season mean),
+        # falling back to single-hour live weather reading when seasonal input is unavailable.
         observed_temp: float | None = None
-        if weather is not None and weather.temperature_c is not None:
-            observed_temp = weather.temperature_c
-        elif request.agricultural_inputs is not None:
+        if request.agricultural_inputs is not None and request.agricultural_inputs.temperature is not None:
             observed_temp = request.agricultural_inputs.temperature
         elif request.temperature is not None:
             observed_temp = request.temperature
+        elif weather is not None and weather.temperature_c is not None:
+            observed_temp = weather.temperature_c
 
         # Rainfall: preference for seasonal agricultural input, then live weather
         observed_rain: float | None = None
-        if request.agricultural_inputs is not None:
+        if request.agricultural_inputs is not None and request.agricultural_inputs.rainfall is not None:
             observed_rain = request.agricultural_inputs.rainfall
         elif request.rainfall is not None:
             observed_rain = request.rainfall
@@ -137,7 +146,7 @@ class FarmAdvisoryService:
         observed_ph: float | None = None
         if soil is not None and soil.soil is not None and soil.soil.ph is not None:
             observed_ph = soil.soil.ph
-        elif request.agricultural_inputs is not None:
+        elif request.agricultural_inputs is not None and request.agricultural_inputs.ph is not None:
             observed_ph = request.agricultural_inputs.ph
         elif request.ph is not None:
             observed_ph = request.ph
@@ -166,6 +175,7 @@ class FarmAdvisoryService:
                 clay_pct=clay_pct,
                 sand_pct=sand_pct,
                 silt_pct=silt_pct,
+                rainfall_is_annual=request.rainfall_is_annual,
             )
 
             # Accumulate risk flags
@@ -280,12 +290,28 @@ class FarmAdvisoryService:
             data_quality=data_quality,
         )
 
-        # 11. Assemble Final Farm Advisory Response
+        # 11. Regional Agronomic Evaluation for Raichur & Yadgir (Karnataka Zone 2 / Zone 1)
+        regional_report: RegionalAdvisoryReport | None = None
+        if is_raichur_yadgir_region(lat, lon) or any(
+            x is not None for x in (request.soil_type, request.irrigation_status, request.season)
+        ):
+            regional_report = evaluate_regional_candidates(
+                latitude=lat,
+                longitude=lon,
+                soil_type=request.soil_type,
+                irrigation=request.irrigation_status,
+                season=request.season,
+                temperature_c=observed_temp,
+                soil_ph=observed_ph,
+            )
+
+        # 12. Assemble Final Farm Advisory Response
         return FarmAdvisoryResponse(
             latitude=lat,
             longitude=lon,
             observation_date=obs_date,
             crop_advisories=crop_advisories,
+            regional_advisory=regional_report,
             water_advisory=water_advisory,
             satellite_context=satellite_context,
             risk_flags=sorted_risk_flags,

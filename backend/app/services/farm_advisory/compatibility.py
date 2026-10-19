@@ -254,6 +254,7 @@ def evaluate_crop_environmental_compatibility(
     clay_pct: float | None = None,
     sand_pct: float | None = None,
     silt_pct: float | None = None,
+    rainfall_is_annual: bool | None = None,
 ) -> Tuple[CompatibilityStatus, dict[str, VariableCompatibility], list[str]]:
     """Perform multi-variable environmental compatibility evaluation for a candidate crop.
 
@@ -287,19 +288,50 @@ def evaluate_crop_environmental_compatibility(
     if temp_eval.status in (CompatibilityStatus.CAUTION, CompatibilityStatus.UNFAVORABLE):
         risk_flags.append("temperature_outside_documented_range")
 
-    # 2. Rainfall evaluation
-    rain_eval = evaluate_numeric_range(
-        variable_name="Rainfall",
-        observed=rainfall_mm,
-        unit="mm",
-        opt_min=requirement.rainfall_opt_min_mm,
-        opt_max=requirement.rainfall_opt_max_mm,
-        abs_min=requirement.rainfall_min_mm,
-        abs_max=requirement.rainfall_max_mm,
-    )
+    # 2. Rainfall evaluation (with temporal period disambiguation)
+    # FAO ECOCROP precipitation thresholds represent 12-month annual totals (mm/year).
+    # Observations from agricultural inputs or recent weather reflect seasonal/trial readings (e.g. 120 mm).
+    is_annual_rain = rainfall_is_annual if rainfall_is_annual is not None else (rainfall_mm is not None and rainfall_mm >= 450.0)
+
+    if rainfall_mm is not None and not is_annual_rain:
+        opt_str = (
+            f"{requirement.rainfall_opt_min_mm:.1f} to {requirement.rainfall_opt_max_mm:.1f} mm/year"
+            if requirement.rainfall_opt_min_mm is not None and requirement.rainfall_opt_max_mm is not None
+            else "Not documented"
+        )
+        abs_str = (
+            f"{requirement.rainfall_min_mm:.1f} to {requirement.rainfall_max_mm:.1f} mm/year"
+            if requirement.rainfall_min_mm is not None and requirement.rainfall_max_mm is not None
+            else "Not documented"
+        )
+        rain_eval = VariableCompatibility(
+            variable="Rainfall",
+            status=CompatibilityStatus.UNAVAILABLE,
+            observed_value=f"{rainfall_mm:.1f} (Seasonal/Trial)",
+            observed_unit="mm",
+            documented_optimal_range=opt_str,
+            documented_absolute_range=abs_str,
+            reason=(
+                f"Observed rainfall ({rainfall_mm:.1f} mm) reflects seasonal or trial precipitation, "
+                f"whereas FAO ECOCROP documented requirements [{abs_str}] represent 12-month annual accumulation. "
+                f"Direct threshold comparison withheld to prevent temporal period mismatch."
+            ),
+            source="FAO ECOCROP",
+        )
+    else:
+        rain_eval = evaluate_numeric_range(
+            variable_name="Rainfall",
+            observed=rainfall_mm,
+            unit="mm/year",
+            opt_min=requirement.rainfall_opt_min_mm,
+            opt_max=requirement.rainfall_opt_max_mm,
+            abs_min=requirement.rainfall_min_mm,
+            abs_max=requirement.rainfall_max_mm,
+        )
+        if rain_eval.status in (CompatibilityStatus.CAUTION, CompatibilityStatus.UNFAVORABLE):
+            risk_flags.append("rainfall_outside_documented_range")
+
     evaluations["rainfall"] = rain_eval
-    if rain_eval.status in (CompatibilityStatus.CAUTION, CompatibilityStatus.UNFAVORABLE):
-        risk_flags.append("rainfall_outside_documented_range")
 
     # 3. Soil pH evaluation
     ph_eval = evaluate_numeric_range(
