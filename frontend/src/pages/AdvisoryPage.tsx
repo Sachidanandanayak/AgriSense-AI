@@ -8,6 +8,7 @@ import { ErrorAlert } from '../components/common/ErrorAlert';
 import { DisclaimerBox } from '../components/common/DisclaimerBox';
 import { RegionalCandidatesSection } from '../components/advisory/RegionalCandidatesSection';
 import { fetchFarmAdvisory } from '../api/advisory';
+import { shouldFetchLive } from '../api/client';
 import type { FarmAdvisoryRequest, CropAdvisoryItem, FarmAdvisoryResponse } from '../types/advisory';
 import type { ApiState } from '../types/common';
 
@@ -26,9 +27,10 @@ export const AdvisoryPage: React.FC = () => {
     setAdvisoryState,
   } = useFarm();
 
-  const handleGenerateAdvisory = async () => {
+  const handleGenerateAdvisory = async (options?: { forceLiveEnv?: boolean }) => {
     setAdvisoryState((prev: ApiState<FarmAdvisoryResponse>) => ({ ...prev, loading: true, error: null }));
 
+    const force = options?.forceLiveEnv ?? false;
     const req: FarmAdvisoryRequest = {
       latitude: location.latitude,
       longitude: location.longitude,
@@ -38,9 +40,9 @@ export const AdvisoryPage: React.FC = () => {
       weather_context: weatherState.data,
       soil_context: soilState.data,
       satellite_context: satelliteState.data,
-      fetch_live_weather: !weatherState.data,
-      fetch_live_soil: !soilState.data,
-      fetch_live_satellite: !satelliteState.data,
+      fetch_live_weather: shouldFetchLive(weatherState, force),
+      fetch_live_soil: shouldFetchLive(soilState, force),
+      fetch_live_satellite: shouldFetchLive(satelliteState, force),
       soil_type: fieldSoilType,
       irrigation_status: irrigationStatus,
       season: croppingSeason,
@@ -81,7 +83,7 @@ export const AdvisoryPage: React.FC = () => {
 
         <button
           type="button"
-          onClick={handleGenerateAdvisory}
+          onClick={() => handleGenerateAdvisory()}
           disabled={advisoryState.loading}
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition-all shadow-sm hover:shadow disabled:opacity-50 cursor-pointer self-start sm:self-auto"
         >
@@ -95,7 +97,7 @@ export const AdvisoryPage: React.FC = () => {
         <ErrorAlert
           title="Advisory Engine Notice"
           message={advisoryState.error}
-          onRetry={handleGenerateAdvisory}
+          onRetry={() => handleGenerateAdvisory()}
         />
       )}
 
@@ -114,7 +116,7 @@ export const AdvisoryPage: React.FC = () => {
             </p>
           </div>
           <button
-            onClick={handleGenerateAdvisory}
+            onClick={() => handleGenerateAdvisory()}
             className="px-6 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold tracking-wide transition-all shadow-xs cursor-pointer"
           >
             Run Agronomic Compatibility Evaluation

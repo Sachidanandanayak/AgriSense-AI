@@ -8,6 +8,7 @@ import { ErrorAlert } from '../components/common/ErrorAlert';
 import { DisclaimerBox } from '../components/common/DisclaimerBox';
 import { RegionalCandidatesSection } from '../components/advisory/RegionalCandidatesSection';
 import { fetchRecommendations } from '../api/recommendations';
+import { shouldFetchLive } from '../api/client';
 import type { AgriculturalInput, RecommendationRequest, CropRecommendationItem } from '../types/recommendation';
 import type { ApiState } from '../types/common';
 import type { RecommendationResponse } from '../types/recommendation';
@@ -19,6 +20,7 @@ export const RecommendationsPage: React.FC = () => {
     fieldSoilType,
     irrigationStatus,
     croppingSeason,
+    agriculturalInputs,
     recommendationState,
     setRecommendationState,
     weatherState,
@@ -26,9 +28,14 @@ export const RecommendationsPage: React.FC = () => {
     satelliteState,
   } = useFarm();
 
-  const handleGenerateRecommendations = async (inputs: AgriculturalInput, topK: number) => {
+  const handleGenerateRecommendations = async (
+    inputs: AgriculturalInput,
+    topK: number,
+    options?: { forceLiveEnv?: boolean }
+  ) => {
     setRecommendationState((prev: ApiState<RecommendationResponse>) => ({ ...prev, loading: true, error: null }));
 
+    const force = options?.forceLiveEnv ?? false;
     const req: RecommendationRequest = {
       latitude: location.latitude,
       longitude: location.longitude,
@@ -38,9 +45,9 @@ export const RecommendationsPage: React.FC = () => {
       weather_context: weatherState.data,
       soil_context: soilState.data,
       satellite_context: satelliteState.data,
-      fetch_live_weather: !weatherState.data,
-      fetch_live_soil: !soilState.data,
-      fetch_live_satellite: !satelliteState.data,
+      fetch_live_weather: shouldFetchLive(weatherState, force),
+      fetch_live_soil: shouldFetchLive(soilState, force),
+      fetch_live_satellite: shouldFetchLive(satelliteState, force),
       soil_type: fieldSoilType,
       irrigation_status: irrigationStatus,
       season: croppingSeason,
@@ -95,16 +102,7 @@ export const RecommendationsPage: React.FC = () => {
           title="Recommendation Engine Failed"
           message={recommendationState.error}
           onRetry={() => {
-            const inputs = {
-              nitrogen: 80,
-              phosphorus: 40,
-              potassium: 40,
-              temperature: 26.5,
-              humidity: 65,
-              ph: 6.8,
-              rainfall: 120,
-            };
-            handleGenerateRecommendations(inputs, 3);
+            handleGenerateRecommendations(agriculturalInputs, 3);
           }}
         />
       )}

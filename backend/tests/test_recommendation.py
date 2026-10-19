@@ -951,6 +951,62 @@ class TestRecommendationApiEndpoint(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(data["disclaimer"], MANDATORY_DISCLAIMER)
             self.assertIn("model_input_features", data)
 
+    async def test_39_recommendations_skip_external_fetches_when_flags_false(self):
+        """39. Verify recommendation service completely skips soil/satellite queries when fetch_live flags are False."""
+        payload = {
+            "latitude": 16.2056,
+            "longitude": 77.3556,
+            "observation_date": "2026-10-10",
+            "agricultural_inputs": {
+                "nitrogen": 80.0,
+                "phosphorus": 40.0,
+                "potassium": 40.0,
+                "temperature": 26.5,
+                "humidity": 65.0,
+                "ph": 6.8,
+                "rainfall": 120.0,
+            },
+            "top_k": 3,
+            "weather_context": None,
+            "soil_context": None,
+            "satellite_context": None,
+            "fetch_live_weather": False,
+            "fetch_live_soil": False,
+            "fetch_live_satellite": False,
+        }
+        with (
+            patch.object(
+                recommendation_service.soil_service,
+                "get_soil_data",
+                new_callable=AsyncMock,
+            ) as mock_soil,
+            patch.object(
+                recommendation_service.satellite_service,
+                "get_satellite_indices",
+                new_callable=AsyncMock,
+            ) as mock_sat,
+            patch.object(
+                recommendation_service.weather_service,
+                "get_current_weather",
+                new_callable=AsyncMock,
+            ) as mock_weather,
+        ):
+            res = await self.client.post("/api/recommendations", json=payload)
+            self.assertEqual(res.status_code, 200)
+            mock_soil.assert_not_called()
+            mock_sat.assert_not_called()
+            mock_weather.assert_not_called()
+
+            data = res.json()
+            self.assertEqual(len(data["recommendations"]), 3)
+            # Confirms data quality honestly reports missing sources without fabricating data
+            self.assertFalse(data["data_quality"]["soil_available"])
+            self.assertFalse(data["data_quality"]["satellite_available"])
+            self.assertFalse(data["data_quality"]["weather_available"])
+            self.assertIn("soil", data["data_quality"]["missing_sources"])
+            self.assertIn("satellite", data["data_quality"]["missing_sources"])
+            self.assertIn("weather", data["data_quality"]["missing_sources"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -3,7 +3,7 @@
  * Handles timeouts, network failure detection, and informative error formatting.
  */
 
-const DEFAULT_TIMEOUT_MS = 25000;
+export const DEFAULT_TIMEOUT_MS = 35000;
 
 export class ApiError extends Error {
   status?: number;
@@ -18,14 +18,32 @@ export class ApiError extends Error {
 }
 
 /**
+ * Determine whether a live environmental provider should be automatically queried.
+ * Prevents redundant hanging queries when the provider already errored or is actively loading,
+ * while allowing explicit user retries (force=true) or fresh queries (error=null, data=null).
+ */
+export function shouldFetchLive(
+  state?: { data: unknown | null; error: unknown | null; loading?: boolean } | null,
+  force: boolean = false
+): boolean {
+  if (force) return true;
+  if (!state) return true;
+  return !state.data && !state.error && !state.loading;
+}
+
+/**
  * Get current configured API Base URL (supports runtime localStorage override for testing)
  */
 export function getApiBaseUrl(): string {
-  const localOverride = localStorage.getItem('agrisense_api_base_url');
+  const localOverride =
+    typeof localStorage !== 'undefined' ? localStorage.getItem('agrisense_api_base_url') : null;
   if (localOverride) {
     return localOverride.replace(/\/+$/, '');
   }
-  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  const envUrl =
+    typeof import.meta !== 'undefined' && import.meta.env
+      ? import.meta.env.VITE_API_BASE_URL
+      : undefined;
   return (envUrl || 'http://127.0.0.1:8000').replace(/\/+$/, '');
 }
 
@@ -33,6 +51,7 @@ export function getApiBaseUrl(): string {
  * Set runtime API Base URL override
  */
 export function setApiBaseUrl(url: string | null): void {
+  if (typeof localStorage === 'undefined') return;
   if (url) {
     localStorage.setItem('agrisense_api_base_url', url.trim().replace(/\/+$/, ''));
   } else {
@@ -88,7 +107,7 @@ export async function apiClient<T>(
     if (error instanceof ApiError) {
       throw error;
     }
-    if (error instanceof DOMException && error.name === 'AbortError') {
+    if ((error instanceof DOMException || error instanceof Error) && error.name === 'AbortError') {
       throw new ApiError(
         `Request to ${endpoint} timed out after ${timeoutMs / 1000}s. Please check backend connection.`,
         408
