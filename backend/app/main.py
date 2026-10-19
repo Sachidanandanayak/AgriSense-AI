@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes.weather import router as weather_router
 from app.api.routes.satellite import router as satellite_router
 from app.api.routes.soil import router as soil_router
@@ -10,6 +11,20 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     description="Satellite & AI-Powered Crop Suitability and Farm Advisory Platform API",
     version=settings.VERSION,
+)
+
+# Configure CORS for local development origins (Vite dev server)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Register API routers
